@@ -62,6 +62,9 @@ auto_detect() {
 # ─── Interactive wizard ───────────────────────────────────────────────────────
 
 run_wizard() {
+    # Redirect stdin to the terminal — required when the script is piped via curl
+    exec < /dev/tty
+
     echo
     echo -e "${BOLD}╔══════════════════════════════════════════════════════════╗${NC}"
     echo -e "${BOLD}║          Setup wizard: Cloudflare R2 → SMB Gateway       ║${NC}"
