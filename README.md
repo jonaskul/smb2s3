@@ -22,7 +22,7 @@ Creates a Debian 13 LXC on Proxmox that mounts a Cloudflare R2 bucket via s3fs a
 Run the script on the **Proxmox host** as root:
 
 ```bash
-bash setup-lxc-r2-smb.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/jonaskul/smb2s3/main/setup-lxc-r2-smb.sh)
 ```
 
 The wizard will prompt for:
