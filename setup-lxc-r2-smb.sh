@@ -4,7 +4,7 @@
 # Must be run on the PROXMOX HOST as root.
 set -euo pipefail
 
-SCRIPT_VERSION="2026-04-30 22:56 CEST"
+SCRIPT_VERSION="2026-04-30 23:05 CEST"
 
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
@@ -283,7 +283,6 @@ configure_samba() {
    workgroup = WORKGROUP
    server string = R2 SMB Gateway
    security = user
-   map to guest = bad user
    log file = /var/log/samba/log.%m
    max log size = 50
    socket options = TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=131072 SO_SNDBUF=131072
