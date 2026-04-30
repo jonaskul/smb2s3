@@ -4,7 +4,7 @@
 # Must be run on the PROXMOX HOST as root.
 set -euo pipefail
 
-SCRIPT_VERSION="2026-04-30 23:35 CEST"
+SCRIPT_VERSION="2026-05-01 00:00 CEST"
 
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
@@ -92,10 +92,13 @@ run_wizard() {
     echo -e "${CYAN}── Cloudflare R2 ───────────────────────────────────────────${NC}"
     ask "R2 Access Key ID:"
     read -r R2_ACCESS_KEY_ID
+    R2_ACCESS_KEY_ID="$(printf '%s' "$R2_ACCESS_KEY_ID" | tr -cd '[:print:]' | tr -d ' ')"
     ask "R2 Secret Access Key:"
     read -r R2_SECRET_ACCESS_KEY
+    R2_SECRET_ACCESS_KEY="$(printf '%s' "$R2_SECRET_ACCESS_KEY" | tr -cd '[:print:]' | tr -d ' ')"
     ask "R2 Account ID (ID only, not the full URL):"
     read -r R2_ACCOUNT_ID
+    R2_ACCOUNT_ID="$(printf '%s' "$R2_ACCOUNT_ID" | tr -cd '[:alnum:]')"
     ask "Is the bucket in the EU jurisdiction? [Y/n, default: Y]:"
     read -r _eu
     [[ "${_eu,,}" =~ ^n ]] && R2_REGION="" || R2_REGION="eu."
