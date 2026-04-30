@@ -6,11 +6,11 @@ set -euo pipefail
 
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
-info()  { echo -e "${GREEN}[INFO]${NC}  $*"; }
-step()  { echo -e "${CYAN}[STEP]${NC}  $*"; }
-warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+info()  { echo -e "${GREEN}[INFO]${NC}  $*" >&2; }
+step()  { echo -e "${CYAN}[STEP]${NC}  $*" >&2; }
+warn()  { echo -e "${YELLOW}[WARN]${NC}  $*" >&2; }
 error() { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
-ask()   { echo -e "${BOLD}$*${NC}"; }
+ask()   { echo -e "${BOLD}$*${NC}" >&2; }
 
 # ─── Requirements ─────────────────────────────────────────────────────────────
 
@@ -94,9 +94,9 @@ run_wizard() {
     read -r R2_SECRET_ACCESS_KEY
     ask "R2 Account ID (ID only, not the full URL):"
     read -r R2_ACCOUNT_ID
-    ask "Is the bucket in the EU jurisdiction? [y/N, default: N]:"
+    ask "Is the bucket in the EU jurisdiction? [Y/n, default: Y]:"
     read -r _eu
-    [[ "${_eu,,}" =~ ^y ]] && R2_REGION="eu." || R2_REGION=""
+    [[ "${_eu,,}" =~ ^n ]] && R2_REGION="" || R2_REGION="eu."
     ask "R2 Bucket name [${R2_BUCKET}]:"
     read -r _input; R2_BUCKET="${_input:-$R2_BUCKET}"
     echo
@@ -143,7 +143,7 @@ confirm_summary() {
     fi
     printf "  %-22s %s\n" "R2 Bucket:"     "$R2_BUCKET"
     printf "  %-22s %s\n" "R2 Account ID:" "$R2_ACCOUNT_ID"
-    printf "  %-22s %s\n" "R2 Jurisdiction:" "${R2_REGION:-standard (US)}"
+    printf "  %-22s %s\n" "R2 Jurisdiction:" "${R2_REGION:+EU}${R2_REGION:-US (standard)}"
     printf "  %-22s %s\n" "Samba user:"    "$SAMBA_USER"
     printf "  %-22s %s\n" "SMB share:"     "\\\\<CT-IP>\\${R2_BUCKET}"
     echo
