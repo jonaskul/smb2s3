@@ -1,54 +1,54 @@
 # smb2s3
 
-Setter opp en Debian 13 LXC på Proxmox som monterer en Cloudflare R2-bucket via s3fs og deler den ut som et SMB-share. Primært ment for bruk som Veeam Backup & Replication-repository.
+Creates a Debian 13 LXC on Proxmox that mounts a Cloudflare R2 bucket via s3fs and exposes it as an SMB share. Primarily intended for use as a Veeam Backup & Replication repository.
 
-## Hva scriptet gjør
+## What the script does
 
-1. Auto-detekterer Proxmox-miljøet (VMID, lagring, bridge)
-2. Kjører en interaktiv veiviser for R2-nøkler, nettverk og Samba-passord
-3. Laster ned Debian 13-template om den ikke finnes lokalt
-4. Oppretter og starter en privilegert LXC med FUSE-støtte
-5. Installerer og konfigurerer s3fs + Samba inni containeren
-6. Skriver ut ferdig SMB-path og PowerShell-testkommando
+1. Auto-detects the Proxmox environment (VMID, storage, bridge)
+2. Runs an interactive wizard for R2 credentials, network settings, and Samba password
+3. Downloads the Debian 13 template if not already present locally
+4. Creates and starts a privileged LXC with FUSE support
+5. Installs and configures s3fs + Samba inside the container
+6. Prints the finished SMB path and a PowerShell test command
 
-## Krav
+## Requirements
 
-- Proxmox-node med tilgang til internett (for template-nedlasting)
-- Cloudflare R2-bucket med API-token (Access Key ID + Secret Access Key + Account ID)
-- Nettverkstilgang mellom Veeam-server og LXCen
+- Proxmox node with internet access (for template download)
+- Cloudflare R2 bucket with API token (Access Key ID + Secret Access Key + Account ID)
+- Network access between the Veeam server and the LXC
 
-## Bruk
+## Usage
 
-Kjør scriptet på **Proxmox-hosten** som root:
+Run the script on the **Proxmox host** as root:
 
 ```bash
 bash setup-lxc-r2-smb.sh
 ```
 
-Scriptet vil spørre om:
+The wizard will prompt for:
 
-| Spørsmål | Eksempel |
+| Prompt | Example |
 |---|---|
-| Nettverksmodus | `dhcp` (default) eller `statisk` |
-| IP + gateway | Kun ved statisk |
-| R2 Access Key ID | Fra Cloudflare-dashbordet |
-| R2 Secret Access Key | Fra Cloudflare-dashbordet |
-| R2 Account ID | Kun ID-en, ikke URL |
-| R2 Bucket-navn | `veeam-backup` (default) |
-| Samba-brukernavn | `veeambackup` (default) |
-| Samba-passord | Valgfritt |
+| Network mode | `dhcp` (default) or `static` |
+| IP + gateway | Static mode only |
+| R2 Access Key ID | From the Cloudflare dashboard |
+| R2 Secret Access Key | From the Cloudflare dashboard |
+| R2 Account ID | ID only, not the full URL |
+| R2 Bucket name | `veeam-backup` (default) |
+| Samba username | `veeambackup` (default) |
+| Samba password | |
 
-En oppsummeringsskjerm vises før noe opprettes.
+A confirmation summary is shown before anything is created.
 
-## Legg til i Veeam
+## Adding to Veeam
 
 1. **Backup Infrastructure → Backup Repositories → Add Repository**
-2. Velg **Network attached storage → SMB share**
-3. UNC-path: `\\<CT-IP>\veeam-backup`
-4. Credentials: brukernavn og passord satt i veiviseren
+2. Select **Network attached storage → SMB share**
+3. UNC path: `\\<CT-IP>\veeam-backup`
+4. Credentials: the username and password set in the wizard
 
-## Merk
+## Notes
 
-- Containeren opprettes som **privilegert** — påkrevd for FUSE-montering
-- `force user = root` i Samba-konfigen er nødvendig fordi s3fs-monteringen eies av root
-- Ikke sett opp lifecycle-regler i R2-bucketen — Veeam håndterer sletting av backup-filer selv
+- The container is created as **privileged** — required for FUSE mounts
+- `force user = root` in the Samba config is necessary because the s3fs mount is owned by root
+- Do not configure lifecycle rules on the R2 bucket — Veeam manages deletion of backup files itself
