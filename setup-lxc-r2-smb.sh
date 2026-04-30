@@ -94,6 +94,9 @@ run_wizard() {
     read -r R2_SECRET_ACCESS_KEY
     ask "R2 Account ID (ID only, not the full URL):"
     read -r R2_ACCOUNT_ID
+    ask "Is the bucket in the EU jurisdiction? [y/N, default: N]:"
+    read -r _eu
+    [[ "${_eu,,}" =~ ^y ]] && R2_REGION="eu." || R2_REGION=""
     ask "R2 Bucket name [${R2_BUCKET}]:"
     read -r _input; R2_BUCKET="${_input:-$R2_BUCKET}"
     echo
@@ -140,6 +143,7 @@ confirm_summary() {
     fi
     printf "  %-22s %s\n" "R2 Bucket:"     "$R2_BUCKET"
     printf "  %-22s %s\n" "R2 Account ID:" "$R2_ACCOUNT_ID"
+    printf "  %-22s %s\n" "R2 Jurisdiction:" "${R2_REGION:-standard (US)}"
     printf "  %-22s %s\n" "Samba user:"    "$SAMBA_USER"
     printf "  %-22s %s\n" "SMB share:"     "\\\\<CT-IP>\\${R2_BUCKET}"
     echo
@@ -232,7 +236,7 @@ setup_credentials() {
 
 setup_mount() {
     step "Configuring s3fs mount..."
-    local r2_url="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+    local r2_url="https://${R2_ACCOUNT_ID}.${R2_REGION}r2.cloudflarestorage.com"
     local fstab_opts="passwd_file=/etc/r2-credentials,url=${r2_url},use_path_request_style"
     fstab_opts+=",allow_other,umask=0022,uid=0,gid=0"
     fstab_opts+=",use_cache=${CACHE_DIR},parallel_count=8,multipart_size=64,ensure_diskfree=2048"
