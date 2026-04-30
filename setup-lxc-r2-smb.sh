@@ -144,7 +144,11 @@ confirm_summary() {
     fi
     printf "  %-22s %s\n" "R2 Bucket:"     "$R2_BUCKET"
     printf "  %-22s %s\n" "R2 Account ID:" "$R2_ACCOUNT_ID"
-    printf "  %-22s %s\n" "R2 Jurisdiction:" "${R2_REGION:+EU}${R2_REGION:-US (standard)}"
+    if [[ -n "$R2_REGION" ]]; then
+        printf "  %-22s %s\n" "R2 Jurisdiction:" "EU"
+    else
+        printf "  %-22s %s\n" "R2 Jurisdiction:" "US (standard)"
+    fi
     printf "  %-22s %s\n" "Samba user:"    "$SAMBA_USER"
     printf "  %-22s %s\n" "SMB share:"     "\\\\<CT-IP>\\${R2_BUCKET}"
     echo
