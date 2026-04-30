@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # setup-lxc-r2-smb.sh
-# Oppretter Debian 12 LXC på Proxmox og setter opp s3fs + Samba mot Cloudflare R2.
+# Oppretter Debian 13 LXC på Proxmox og setter opp s3fs + Samba mot Cloudflare R2.
 # Kjøres på PROXMOX-HOSTEN som root.
 set -euo pipefail
 
@@ -70,10 +70,17 @@ run_wizard() {
 
     # ── Nettverk ──
     echo -e "${CYAN}── Nettverk ────────────────────────────────────────────────${NC}"
-    ask "LXC IP-adresse med prefixlengde (f.eks. 192.168.1.100/24):"
-    read -r CT_IP
-    ask "Gateway (f.eks. 192.168.1.1):"
-    read -r CT_GW
+    ask "Nettverkskonfigurasjon — DHCP eller statisk? [dhcp/statisk, default: dhcp]:"
+    read -r _net_mode
+    if [[ "${_net_mode,,}" == "statisk" ]]; then
+        ask "IP-adresse med prefixlengde (f.eks. 192.168.1.100/24):"
+        read -r CT_IP
+        ask "Gateway (f.eks. 192.168.1.1):"
+        read -r CT_GW
+    else
+        CT_IP="dhcp"
+        CT_GW=""
+    fi
     echo
 
     # ── Cloudflare R2 ──
@@ -102,8 +109,10 @@ run_wizard() {
 
 validate_wizard_input() {
     local missing=()
-    [[ -z "${CT_IP:-}"               ]] && missing+=("IP-adresse")
-    [[ -z "${CT_GW:-}"               ]] && missing+=("Gateway")
+    if [[ "${CT_IP:-}" != "dhcp" ]]; then
+        [[ -z "${CT_IP:-}" ]] && missing+=("IP-adresse")
+        [[ -z "${CT_GW:-}" ]] && missing+=("Gateway")
+    fi
     [[ -z "${R2_ACCESS_KEY_ID:-}"    ]] && missing+=("R2 Access Key ID")
     [[ -z "${R2_SECRET_ACCESS_KEY:-}" ]] && missing+=("R2 Secret Access Key")
     [[ -z "${R2_ACCOUNT_ID:-}"       ]] && missing+=("R2 Account ID")
@@ -115,18 +124,21 @@ validate_wizard_input() {
 }
 
 confirm_summary() {
-    local lxc_ip="${CT_IP%%/*}"
     echo -e "${BOLD}── Oppsummering ────────────────────────────────────────────${NC}"
     printf "  %-22s %s\n" "VMID:"           "$VMID"
     printf "  %-22s %s\n" "Hostname:"       "$CT_HOSTNAME"
     printf "  %-22s %s\n" "Lagring:"        "$ROOTFS_STORAGE (${DISK_GB}GB)"
     printf "  %-22s %s\n" "Bridge:"         "$BRIDGE"
-    printf "  %-22s %s\n" "IP:"             "$CT_IP"
-    printf "  %-22s %s\n" "Gateway:"        "$CT_GW"
+    if [[ "$CT_IP" == "dhcp" ]]; then
+        printf "  %-22s %s\n" "IP:"         "DHCP (tildeles ved oppstart)"
+    else
+        printf "  %-22s %s\n" "IP:"         "$CT_IP"
+        printf "  %-22s %s\n" "Gateway:"    "$CT_GW"
+    fi
     printf "  %-22s %s\n" "R2 Bucket:"      "$R2_BUCKET"
     printf "  %-22s %s\n" "R2 Account ID:"  "$R2_ACCOUNT_ID"
     printf "  %-22s %s\n" "Samba-bruker:"   "$SAMBA_USER"
-    printf "  %-22s %s\n" "SMB-share:"      "\\\\${lxc_ip}\\${R2_BUCKET}"
+    printf "  %-22s %s\n" "SMB-share:"      "\\\\<CT-IP>\\${R2_BUCKET}"
     echo
     ask "Ser dette riktig ut? Fortsett? [j/N]"
     read -r _confirm
@@ -137,12 +149,12 @@ confirm_summary() {
 # ─── Template ─────────────────────────────────────────────────────────────────
 
 get_template() {
-    step "Leter etter Debian 12-template..."
+    step "Leter etter Debian 13-template..."
     pveam update -q 2>/dev/null || warn "pveam update feilet, fortsetter med lokal cache."
 
     local tmpl
     tmpl=$(pveam list "$TEMPLATE_STORAGE" 2>/dev/null \
-        | awk '/debian-12-standard/ {print $1; exit}')
+        | awk '/debian-13-standard/ {print $1; exit}')
 
     if [[ -n "$tmpl" ]]; then
         info "Fant template: $tmpl"
@@ -152,8 +164,8 @@ get_template() {
 
     local avail
     avail=$(pveam available --section system 2>/dev/null \
-        | awk '/debian-12-standard/ {print $2; exit}')
-    [[ -z "$avail" ]] && error "Fant ingen debian-12-standard template. Sjekk internettilgang fra Proxmox-noden."
+        | awk '/debian-13-standard/ {print $2; exit}')
+    [[ -z "$avail" ]] && error "Fant ingen debian-13-standard template. Sjekk at Proxmox-noden har internettilgang og at Debian 13 er tilgjengelig i pveam."
 
     info "Laster ned template: $avail"
     pveam download "$TEMPLATE_STORAGE" "$avail"
@@ -166,12 +178,15 @@ create_container() {
     local template_path="$1"
     step "Oppretter LXC $VMID ($CT_HOSTNAME)..."
 
+    local net0="name=eth0,bridge=${BRIDGE},ip=${CT_IP}"
+    [[ -n "$CT_GW" ]] && net0+=",gw=${CT_GW}"
+
     pct create "$VMID" "$template_path" \
         --hostname   "$CT_HOSTNAME" \
         --memory     "$MEMORY_MB" \
         --cores      "$CORES" \
         --rootfs     "${ROOTFS_STORAGE}:${DISK_GB}" \
-        --net0       "name=eth0,bridge=${BRIDGE},ip=${CT_IP},gw=${CT_GW}" \
+        --net0       "$net0" \
         --nameserver "$CT_DNS" \
         --unprivileged 0 \
         --features   "fuse=1,mounts=fuse" \
@@ -274,7 +289,14 @@ start_services() {
 # ─── Sammendrag ───────────────────────────────────────────────────────────────
 
 print_summary() {
-    local lxc_ip="${CT_IP%%/*}"
+    local lxc_ip
+    if [[ "$CT_IP" == "dhcp" ]]; then
+        lxc_ip=$(pct exec "$VMID" -- hostname -I 2>/dev/null | awk '{print $1}')
+        [[ -z "$lxc_ip" ]] && lxc_ip="<sjekk: pct exec $VMID -- hostname -I>"
+    else
+        lxc_ip="${CT_IP%%/*}"
+    fi
+
     echo
     echo -e "${GREEN}╔══════════════════════════════════════════════════════════╗${NC}"
     echo -e "${GREEN}║  Oppsett fullført!                                       ║${NC}"
