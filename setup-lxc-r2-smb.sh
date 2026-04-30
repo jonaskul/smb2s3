@@ -4,7 +4,7 @@
 # Must be run on the PROXMOX HOST as root.
 set -euo pipefail
 
-SCRIPT_VERSION="2026-04-30 15:10 UTC"
+SCRIPT_VERSION="2026-04-30 15:30 UTC"
 
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
@@ -230,6 +230,20 @@ start_and_wait() {
     error "Container did not respond within timeout."
 }
 
+wait_for_dns() {
+    step "Waiting for DNS to become available..."
+    local retries=15
+    while (( retries-- > 0 )); do
+        if pct exec "$VMID" -- bash -c "getent hosts deb.debian.org" &>/dev/null; then
+            info "DNS is working."
+            return
+        fi
+        info "DNS not ready yet, retrying in 3s..."
+        sleep 3
+    done
+    error "DNS not available inside container after timeout. Check that the container has a working network route and that the DHCP lease was obtained."
+}
+
 # ─── Configuration inside the container ──────────────────────────────────────
 
 exec_ct() { pct exec "$VMID" -- bash -c "$1"; }
@@ -348,6 +362,7 @@ main() {
 
     create_container "$template_path"
     start_and_wait
+    wait_for_dns
     install_packages
     setup_credentials
     setup_mount
