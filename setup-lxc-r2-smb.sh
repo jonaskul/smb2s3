@@ -125,8 +125,9 @@ validate_wizard_input() {
     [[ -z "${SAMBA_PASSWORD:-}"       ]] && missing+=("Samba password")
     [[ ${#missing[@]} -gt 0 ]] && error "Missing required values: ${missing[*]}"
 
-    pct status "$VMID" &>/dev/null && \
+    if pct status "$VMID" &>/dev/null; then
         error "CT $VMID already exists. Re-run the script — a new VMID will be suggested."
+    fi
 }
 
 confirm_summary() {
@@ -214,7 +215,10 @@ start_and_wait() {
     info "Waiting for container to become ready..."
     local retries=20
     while (( retries-- > 0 )); do
-        pct exec "$VMID" -- true &>/dev/null && { info "Container is responding."; return; }
+        if pct exec "$VMID" -- true &>/dev/null; then
+            info "Container is responding."
+            return
+        fi
         sleep 2
     done
     error "Container did not respond within timeout."
