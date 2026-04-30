@@ -4,7 +4,7 @@
 # Must be run on the PROXMOX HOST as root.
 set -euo pipefail
 
-SCRIPT_VERSION="2026-04-30 15:30 UTC"
+SCRIPT_VERSION="2026-04-30 15:45 UTC"
 
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
@@ -317,6 +317,17 @@ start_services() {
     exec_ct "systemctl enable smbd nmbd && systemctl restart smbd nmbd"
 }
 
+setup_autologin() {
+    step "Configuring root auto-login on console..."
+    exec_ct "mkdir -p /etc/systemd/system/container-getty@1.service.d"
+    exec_ct "cat > /etc/systemd/system/container-getty@1.service.d/autologin.conf <<'EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 \$TERM
+EOF"
+    exec_ct "systemctl daemon-reload"
+}
+
 # ─── Summary ──────────────────────────────────────────────────────────────────
 
 print_summary() {
@@ -369,6 +380,7 @@ main() {
     configure_samba
     setup_samba_user
     start_services
+    setup_autologin
     print_summary
 }
 
