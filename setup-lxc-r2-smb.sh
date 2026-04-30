@@ -201,7 +201,7 @@ create_container() {
         --net0       "$net0" \
         --nameserver "$CT_DNS" \
         --unprivileged 0 \
-        --features   "fuse=1,mounts=fuse" \
+        --features   "fuse=1" \
         --onboot     1 \
         --start      0
 
