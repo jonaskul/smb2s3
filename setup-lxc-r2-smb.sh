@@ -91,7 +91,7 @@ run_wizard() {
     ask "R2 Access Key ID:"
     read -r R2_ACCESS_KEY_ID
     ask "R2 Secret Access Key:"
-    read -rsp "" R2_SECRET_ACCESS_KEY; echo
+    read -r R2_SECRET_ACCESS_KEY
     ask "R2 Account ID (ID only, not the full URL):"
     read -r R2_ACCOUNT_ID
     ask "R2 Bucket name [${R2_BUCKET}]:"
@@ -103,7 +103,7 @@ run_wizard() {
     ask "Samba username [${SAMBA_USER}]:"
     read -r _input; SAMBA_USER="${_input:-$SAMBA_USER}"
     ask "Samba password:"
-    read -rsp "" SAMBA_PASSWORD; echo
+    read -r SAMBA_PASSWORD
     echo
 
     validate_wizard_input
