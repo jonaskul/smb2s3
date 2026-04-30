@@ -4,7 +4,7 @@
 # Must be run on the PROXMOX HOST as root.
 set -euo pipefail
 
-SCRIPT_VERSION="2026-04-30 23:20 CEST"
+SCRIPT_VERSION="2026-04-30 23:35 CEST"
 
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
@@ -100,13 +100,17 @@ run_wizard() {
     read -r _eu
     [[ "${_eu,,}" =~ ^n ]] && R2_REGION="" || R2_REGION="eu."
     ask "R2 Bucket name [${R2_BUCKET}]:"
-    read -r _input; R2_BUCKET="${_input:-$R2_BUCKET}"
+    read -r _input
+    _input="${_input//[^a-zA-Z0-9_.-]/}"
+    R2_BUCKET="${_input:-$R2_BUCKET}"
     echo
 
     # ── Samba ──
     echo -e "${CYAN}── Samba ───────────────────────────────────────────────────${NC}"
     ask "Samba username [${SAMBA_USER}]:"
-    read -r _input; SAMBA_USER="${_input:-$SAMBA_USER}"
+    read -r _input
+    _input="${_input//[^a-zA-Z0-9_.-]/}"
+    SAMBA_USER="${_input:-$SAMBA_USER}"
     ask "Samba password:"
     read -r SAMBA_PASSWORD
     echo
