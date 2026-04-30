@@ -13,7 +13,7 @@ Creates a Debian 13 LXC on Proxmox that mounts a Cloudflare R2 bucket via s3fs a
 
 ## Requirements
 
-- Proxmox node with internet access (for template download)
+- Proxmox node with internet access (for template download and apt packages)
 - Cloudflare R2 bucket with API token (Access Key ID + Secret Access Key + Account ID)
 - Network access between the Veeam server and the LXC
 
@@ -34,17 +34,22 @@ The wizard will prompt for:
 | R2 Access Key ID | From the Cloudflare dashboard |
 | R2 Secret Access Key | From the Cloudflare dashboard |
 | R2 Account ID | ID only, not the full URL |
-| R2 Bucket name | `veeam-backup` (default) |
+| EU jurisdiction | `Y` (default) or `n` |
+| R2 Bucket name | Must match the exact name in Cloudflare R2 |
 | Samba username | `veeambackup` (default) |
 | Samba password | |
 
 A confirmation summary is shown before anything is created.
 
+## Cloudflare R2 API token requirements
+
+The token must have **Object Read & Write** permission scoped to the specific bucket. EU jurisdiction must match the actual bucket location — a standard bucket will not respond on the EU endpoint and vice versa.
+
 ## Adding to Veeam
 
 1. **Backup Infrastructure → Backup Repositories → Add Repository**
 2. Select **Network attached storage → SMB share**
-3. UNC path: `\\<CT-IP>\veeam-backup`
+3. UNC path: `\\<CT-IP>\<bucket-name>`
 4. Credentials: the username and password set in the wizard
 
 ## Notes
@@ -52,3 +57,4 @@ A confirmation summary is shown before anything is created.
 - The container is created as **privileged** — required for FUSE mounts
 - `force user = root` in the Samba config is necessary because the s3fs mount is owned by root
 - Do not configure lifecycle rules on the R2 bucket — Veeam manages deletion of backup files itself
+- The container auto-logs in as root on the console (Proxmox Shell button)

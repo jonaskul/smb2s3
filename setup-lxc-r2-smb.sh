@@ -4,7 +4,7 @@
 # Must be run on the PROXMOX HOST as root.
 set -euo pipefail
 
-SCRIPT_VERSION="2026-05-01 00:00 CEST"
+SCRIPT_VERSION="2026-05-01 00:20 CEST"
 
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
@@ -271,15 +271,16 @@ setup_mount() {
     local fstab_opts="passwd_file=/etc/r2-credentials,url=${r2_url},use_path_request_style"
     fstab_opts+=",allow_other,umask=0022,uid=0,gid=0"
     fstab_opts+=",use_cache=${CACHE_DIR},parallel_count=8,multipart_size=64,ensure_diskfree=2048"
+    local fstab_line="s3fs#${R2_BUCKET} ${MOUNT_POINT} fuse _netdev,${fstab_opts} 0 0"
 
     exec_ct "mkdir -p '${MOUNT_POINT}' '${CACHE_DIR}'"
     exec_ct "grep -q '^user_allow_other' /etc/fuse.conf 2>/dev/null || echo 'user_allow_other' >> /etc/fuse.conf"
-    exec_ct "grep -qF 's3fs#${R2_BUCKET}' /etc/fstab || \
-        echo 's3fs#${R2_BUCKET} ${MOUNT_POINT} fuse _netdev,${fstab_opts} 0 0' >> /etc/fstab"
+
+    pct exec "$VMID" -- bash -c "grep -qF 's3fs#${R2_BUCKET}' /etc/fstab || echo '${fstab_line}' >> /etc/fstab"
 
     info "Testing R2 bucket mount..."
-    exec_ct "mount '${MOUNT_POINT}'" \
-        || error "s3fs mount failed. Check R2_ACCOUNT_ID, credentials, and that the bucket exists."
+    exec_ct "systemctl daemon-reload && mount '${MOUNT_POINT}'" \
+        || error "s3fs mount failed. Check R2 account ID, credentials, bucket name, and jurisdiction."
     info "Mount successful."
 }
 
