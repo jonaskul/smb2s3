@@ -4,7 +4,7 @@
 # Must be run on the PROXMOX HOST as root.
 set -euo pipefail
 
-SCRIPT_VERSION="2026-04-30 23:05 CEST"
+SCRIPT_VERSION="2026-04-30 23:20 CEST"
 
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
@@ -285,6 +285,7 @@ configure_samba() {
    security = user
    log file = /var/log/samba/log.%m
    max log size = 50
+   usershare max shares = 0
    socket options = TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=131072 SO_SNDBUF=131072
    read raw = yes
    write raw = yes
