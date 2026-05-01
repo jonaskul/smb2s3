@@ -299,6 +299,19 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
+    pct exec "$VMID" -- bash -c "cat > /usr/local/bin/smb2s3-update" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+RAW=https://raw.githubusercontent.com/jonaskul/smb2s3/main/web
+curl -fsSL ${RAW}/app.py            -o /opt/smb2s3/app.py
+curl -fsSL ${RAW}/static/index.html -o /opt/smb2s3/static/index.html
+curl -fsSL ${RAW}/static/app.js     -o /opt/smb2s3/static/app.js
+curl -fsSL ${RAW}/static/style.css  -o /opt/smb2s3/static/style.css
+systemctl restart smb2s3-web
+echo "smb2s3 updated."
+EOF
+    exec_ct "chmod +x /usr/local/bin/smb2s3-update"
+
     exec_ct "systemctl daemon-reload && systemctl enable --now smb2s3-web"
     info "Web UI started on port 8080."
 }
