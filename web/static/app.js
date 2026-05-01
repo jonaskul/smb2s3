@@ -312,6 +312,23 @@
           </span>
           <span class="cache-size">${(sh.cache_bytes / 1048576).toFixed(0)} MB cached</span>
         </div>`).join("");
+
+      const wdSection = document.getElementById("watchdog-section");
+      const wdRows    = document.getElementById("watchdog-rows");
+      const wdCount   = document.getElementById("watchdog-count");
+      const log = s.watchdog_log || [];
+      if (log.length === 0) {
+        wdSection.hidden = true;
+      } else {
+        wdSection.hidden = false;
+        wdCount.textContent = `${log.length} event${log.length !== 1 ? "s" : ""}`;
+        wdRows.innerHTML = [...log].reverse().map((line) => {
+          const cls = line.includes("remount failed") ? "wd-fail"
+                    : line.includes("remounted:")     ? "wd-ok"
+                    : "wd-warn";
+          return `<div class="watchdog-row ${cls}">${esc(line)}</div>`;
+        }).join("");
+      }
     } catch (e) {
       if (e.status === 401) { showLogin("Session expired — please log in again."); }
     }

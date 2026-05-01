@@ -430,12 +430,24 @@ def get_stats():
     except Exception:
         pass
 
+    watchdog_log = []
+    try:
+        r = subprocess.run(
+            ["journalctl", "-t", "smb2s3-watchdog", "-n", "20",
+             "--no-pager", "--output=short-iso"],
+            capture_output=True, text=True, timeout=5,
+        )
+        watchdog_log = [l for l in r.stdout.splitlines() if l and not l.startswith("--")]
+    except Exception:
+        pass
+
     return jsonify({
         "timestamp": time.time(),
         "network": _net_stats(),
         "memory": _mem_stats(),
         "load_1": load,
         "shares": shares,
+        "watchdog_log": watchdog_log,
     })
 
 
