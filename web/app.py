@@ -409,7 +409,7 @@ def create_share():
     eu = bool(data.get("eu", True))
     access_key_id = data.get("access_key_id", "").strip()
     secret = data.get("secret_access_key", "").strip()
-    samba_user = re.sub(r"[^a-zA-Z0-9_.-]", "", data.get("samba_user", "veeambackup")) or "veeambackup"
+    samba_user = re.sub(r"[^a-zA-Z0-9_.-]", "", data.get("samba_user", "")) or "backupuser"
     samba_password = data.get("samba_password", "")
 
     if not all([account_id, access_key_id, secret, samba_password]):
@@ -455,7 +455,7 @@ def update_share(name):
     eu = bool(data.get("eu", True))
     access_key_id = data.get("access_key_id", "").strip()
     secret = data.get("secret_access_key", "").strip()
-    samba_user = re.sub(r"[^a-zA-Z0-9_.-]", "", data.get("samba_user", "")) or sections[name].get("valid users", "veeambackup")
+    samba_user = re.sub(r"[^a-zA-Z0-9_.-]", "", data.get("samba_user", "")) or sections[name].get("valid users", "backupuser")
     samba_password = data.get("samba_password", "")
 
     try:

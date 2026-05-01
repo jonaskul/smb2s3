@@ -1,6 +1,6 @@
 # smb2s3
 
-Creates a Debian 13 LXC on Proxmox that mounts Cloudflare R2 buckets via s3fs and exposes them as SMB shares. Primarily intended for use as a Veeam Backup & Replication repository.
+Creates a Debian 13 LXC on Proxmox that mounts Cloudflare R2 buckets via s3fs and exposes them as SMB shares.
 
 ## What the script does
 
@@ -19,7 +19,7 @@ R2 buckets and SMB shares are configured through the web UI after setup.
 
 - Proxmox node with internet access (for template download and apt packages)
 - Cloudflare R2 bucket with API token (Access Key ID + Secret Access Key + Account ID)
-- Network access between the Veeam server and the LXC
+- Network access between the SMB client and the LXC
 
 ## Usage
 
@@ -77,18 +77,14 @@ smb2s3-update
 
 The token must have **Object Read & Write** permission scoped to the specific bucket. EU jurisdiction must match the actual bucket location — a standard bucket will not respond on the EU endpoint and vice versa.
 
-## Adding to Veeam
+## Connecting an SMB client
 
-1. Open the web UI and add a share — note the bucket name and Samba credentials you set
-2. **Backup Infrastructure → Backup Repositories → Add Repository**
-3. Select **Network attached storage → SMB share**
-4. UNC path: `\\<CT-IP>\<bucket-name>`
-5. Credentials: the Samba username and password set in the web UI
+1. Open the web UI and add a share — note the share name and Samba credentials you set
+2. Connect using the UNC path `\\<CT-IP>\<share-name>` with the Samba username and password set in the web UI
 
 ## Notes
 
 - The container is created as **privileged** — required for FUSE mounts
 - `force user = root` in the Samba config is necessary because the s3fs mount is owned by root
-- Do not configure lifecycle rules on the R2 bucket — Veeam manages deletion of backup files itself
-- The container auto-logs in as root on the Proxmox **Console** tab (the Shell button always gives root directly and does not need autologin)
 - Each share uses a separate credential file `/etc/r2-credentials-{name}` and mount point `/mnt/r2-{name}`
+- The container auto-logs in as root on the Proxmox **Console** tab (the Shell button always gives root directly and does not need autologin)

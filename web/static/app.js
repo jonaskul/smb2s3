@@ -147,7 +147,7 @@
     modalTitle.textContent = "Add Share";
     shareForm.reset();
     fEu.checked = true;
-    fSambaUser.value = "veeambackup";
+    fSambaUser.value = "";
     nameGroup.hidden = false;
     fName.required = true;
     fKey.required = true;
