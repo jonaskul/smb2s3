@@ -90,6 +90,68 @@ WantedBy=multi-user.target
 _ensure_mount_service()
 
 
+WATCHDOG_SCRIPT = "/usr/local/bin/smb2s3-watchdog"
+WATCHDOG_SERVICE = "/etc/systemd/system/smb2s3-watchdog.service"
+WATCHDOG_TIMER   = "/etc/systemd/system/smb2s3-watchdog.timer"
+
+def _ensure_watchdog():
+    script = """\
+#!/usr/bin/env bash
+set -euo pipefail
+while IFS= read -r line; do
+    [[ "$line" =~ ^s3fs# ]] || continue
+    mp=$(awk '{print $2}' <<< "$line")
+    grep -q " $mp " /proc/mounts && continue
+    logger -t smb2s3-watchdog "unmounted: $mp — remounting"
+    if mount "$mp" 2>/dev/null; then
+        logger -t smb2s3-watchdog "remounted: $mp"
+    else
+        logger -t smb2s3-watchdog "remount failed: $mp"
+    fi
+done < /etc/fstab
+"""
+    service = """\
+[Unit]
+Description=smb2s3 mount watchdog
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/smb2s3-watchdog
+"""
+    timer = """\
+[Unit]
+Description=smb2s3 mount watchdog timer
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=60
+
+[Install]
+WantedBy=timers.target
+"""
+    try:
+        changed = False
+        for path, content, mode in [
+            (WATCHDOG_SCRIPT,  script,  0o755),
+            (WATCHDOG_SERVICE, service, 0o644),
+            (WATCHDOG_TIMER,   timer,   0o644),
+        ]:
+            existing = open(path).read() if os.path.exists(path) else ""
+            if existing != content:
+                with open(path, "w") as f:
+                    f.write(content)
+                os.chmod(path, mode)
+                changed = True
+        if changed:
+            subprocess.run(["systemctl", "daemon-reload"], check=False)
+            subprocess.run(["systemctl", "enable", "--now", "smb2s3-watchdog.timer"], check=False)
+    except Exception:
+        pass
+
+_ensure_watchdog()
+
+
 # ─── Auth ─────────────────────────────────────────────────────────────────────
 
 def require_login(f):
