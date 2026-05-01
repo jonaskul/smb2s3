@@ -1,6 +1,6 @@
 # smb2s3
 
-Creates a Debian 13 LXC on Proxmox that mounts a Cloudflare R2 bucket via s3fs and exposes it as an SMB share. Primarily intended for use as a Veeam Backup & Replication repository.
+Creates a Debian 13 LXC on Proxmox that mounts Cloudflare R2 buckets via s3fs and exposes them as SMB shares. Primarily intended for use as a Veeam Backup & Replication repository.
 
 ## What the script does
 
@@ -12,7 +12,7 @@ Creates a Debian 13 LXC on Proxmox that mounts a Cloudflare R2 bucket via s3fs a
 6. Sets up a web management UI (port 8080) for adding and managing R2 shares
 7. Prints the web UI URL and login credentials
 
-R2 buckets and SMB shares are configured through the web UI after setup — no credentials needed in the wizard.
+R2 buckets and SMB shares are configured through the web UI after setup.
 
 ## Requirements
 
@@ -41,14 +41,36 @@ A confirmation summary is shown before anything is created.
 
 ## Web management UI
 
-After setup, a browser-based UI is available at `http://<CT-IP>:8080`. It allows you to:
+After setup, a browser-based UI is available at `http://<CT-IP>:8080`. Log in with the credentials set during the wizard.
+
+### Shares
 
 - View all configured SMB shares and their mount status
-- Add new R2 shares (each with its own bucket, credentials, and Samba user)
+- Add new R2 shares — each with its own bucket, credentials, and Samba user
 - Edit existing shares (update credentials, account ID, or Samba password)
 - Delete shares (unmounts, removes from fstab and smb.conf)
 
-Login with the web UI credentials set during the wizard.
+### Stats
+
+A live stats panel is always visible on the dashboard:
+
+- **Network graph** — TX/RX throughput over the last ~3 minutes (updates every 3 seconds)
+- **System card** — memory usage bar and CPU load average
+- **Per-share cache** — mount status and local cache size for each share
+
+### Settings
+
+The ⚙ Settings button in the top bar provides:
+
+- **SNMP monitoring** — enable/disable `snmpd` with configurable community string and allowed host/CIDR. Compatible with the Zabbix **Linux by SNMP** template.
+
+## Updating the web UI
+
+Run this inside the container as root to pull the latest version from GitHub:
+
+```bash
+smb2s3-update
+```
 
 ## Cloudflare R2 API token requirements
 
