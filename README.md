@@ -10,7 +10,8 @@ Creates a Debian 13 LXC on Proxmox that mounts Cloudflare R2 buckets via s3fs an
 4. Creates and starts a privileged LXC with FUSE support
 5. Installs s3fs, Samba, and Python/Flask inside the container
 6. Sets up a web management UI (port 8080) for adding and managing R2 shares
-7. Prints the web UI URL and login credentials
+7. Configures root auto-login on the container console
+8. Prints the web UI URL and login credentials
 
 R2 buckets and SMB shares are configured through the web UI after setup.
 
@@ -89,5 +90,5 @@ The token must have **Object Read & Write** permission scoped to the specific bu
 - The container is created as **privileged** — required for FUSE mounts
 - `force user = root` in the Samba config is necessary because the s3fs mount is owned by root
 - Do not configure lifecycle rules on the R2 bucket — Veeam manages deletion of backup files itself
-- The container auto-logs in as root on the console (Proxmox Shell button)
+- The container auto-logs in as root on the Proxmox **Console** tab (the Shell button always gives root directly and does not need autologin)
 - Each share uses a separate credential file `/etc/r2-credentials-{name}` and mount point `/mnt/r2-{name}`
