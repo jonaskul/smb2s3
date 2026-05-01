@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # setup-lxc-r2-smb.sh
-# Creates a Debian 13 LXC on Proxmox that mounts a Cloudflare R2 bucket via s3fs
-# and exposes it as an SMB share. Run on the Proxmox host as root.
-SCRIPT_VERSION="2026-05-01 12:00 CEST"
+# Creates a Debian 13 LXC on Proxmox with s3fs + Samba + web management UI.
+# R2 buckets and SMB shares are configured through the web UI after setup.
+# Run on the Proxmox host as root.
+SCRIPT_VERSION="2026-05-01 14:00 CEST"
 set -euo pipefail
 
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
@@ -53,9 +54,6 @@ auto_detect() {
     MEMORY_MB=512
     CORES=1
     CT_DNS="1.1.1.1"
-    R2_BUCKET="veeam-backup"
-    R2_REGION=""
-    SAMBA_USER="veeambackup"
     WEB_ADMIN_USER="admin"
 }
 
@@ -85,38 +83,6 @@ run_wizard() {
     fi
     echo
 
-    # ── Cloudflare R2 ──
-    echo -e "${CYAN}── Cloudflare R2 ───────────────────────────────────────────${NC}"
-    ask "R2 Access Key ID:"
-    read -r _input; R2_ACCESS_KEY_ID=$(printf '%s' "$_input" | tr -cd '[:print:]')
-    ask "R2 Secret Access Key:"
-    read -r _input; R2_SECRET_ACCESS_KEY=$(printf '%s' "$_input" | tr -cd '[:print:]')
-    ask "R2 Account ID (ID only, not the full URL):"
-    read -r _input; R2_ACCOUNT_ID=$(printf '%s' "$_input" | tr -cd '[:print:]')
-    ask "R2 Bucket name [${R2_BUCKET}]:"
-    read -r _input
-    _input=$(printf '%s' "${_input:-$R2_BUCKET}" | tr -cd '[:print:]')
-    R2_BUCKET="${_input//[^a-zA-Z0-9_.-]/}"
-    R2_BUCKET="${R2_BUCKET:-veeam-backup}"
-    ask "EU jurisdiction? [Y/n]:"
-    read -r _input
-    if [[ "${_input,,}" =~ ^n ]]; then
-        R2_REGION=""
-    else
-        R2_REGION="eu."
-    fi
-    echo
-
-    # ── Samba ──
-    echo -e "${CYAN}── Samba ───────────────────────────────────────────────────${NC}"
-    ask "Samba username [${SAMBA_USER}]:"
-    read -r _input
-    _sanitized="${_input//[^a-zA-Z0-9_.-]/}"
-    SAMBA_USER="${_sanitized:-$SAMBA_USER}"
-    ask "Samba password:"
-    read -r SAMBA_PASSWORD
-    echo
-
     # ── Web UI ──
     echo -e "${CYAN}── Web UI ──────────────────────────────────────────────────${NC}"
     ask "Web UI admin username [${WEB_ADMIN_USER}]:"
@@ -137,11 +103,7 @@ validate_wizard_input() {
         [[ -z "${CT_IP:-}" ]] && missing+=("IP address")
         [[ -z "${CT_GW:-}" ]] && missing+=("Gateway")
     fi
-    [[ -z "${R2_ACCESS_KEY_ID:-}"     ]] && missing+=("R2 Access Key ID")
-    [[ -z "${R2_SECRET_ACCESS_KEY:-}" ]] && missing+=("R2 Secret Access Key")
-    [[ -z "${R2_ACCOUNT_ID:-}"        ]] && missing+=("R2 Account ID")
-    [[ -z "${SAMBA_PASSWORD:-}"       ]] && missing+=("Samba password")
-    [[ -z "${WEB_ADMIN_PASSWORD:-}"   ]] && missing+=("Web UI admin password")
+    [[ -z "${WEB_ADMIN_PASSWORD:-}" ]] && missing+=("Web UI admin password")
     [[ ${#missing[@]} -gt 0 ]] && error "Missing required values: ${missing[*]}"
 
     if pct status "$VMID" &>/dev/null; then
@@ -150,31 +112,19 @@ validate_wizard_input() {
 }
 
 confirm_summary() {
-    local jurisdiction
-    if [[ -n "$R2_REGION" ]]; then
-        jurisdiction="EU"
-    else
-        jurisdiction="US (standard)"
-    fi
-
     echo -e "${BOLD}── Summary ─────────────────────────────────────────────────${NC}"
-    printf "  %-24s %s\n" "VMID:"            "$VMID"
-    printf "  %-24s %s\n" "Hostname:"        "$CT_HOSTNAME"
-    printf "  %-24s %s\n" "Storage:"         "$ROOTFS_STORAGE (${DISK_GB}GB)"
-    printf "  %-24s %s\n" "Bridge:"          "$BRIDGE"
+    printf "  %-24s %s\n" "VMID:"         "$VMID"
+    printf "  %-24s %s\n" "Hostname:"     "$CT_HOSTNAME"
+    printf "  %-24s %s\n" "Storage:"      "$ROOTFS_STORAGE (${DISK_GB}GB)"
+    printf "  %-24s %s\n" "Bridge:"       "$BRIDGE"
     if [[ "$CT_IP" == "dhcp" ]]; then
-        printf "  %-24s %s\n" "IP:"          "DHCP (assigned at boot)"
+        printf "  %-24s %s\n" "IP:"       "DHCP (assigned at boot)"
     else
-        printf "  %-24s %s\n" "IP:"          "$CT_IP"
-        printf "  %-24s %s\n" "Gateway:"     "$CT_GW"
+        printf "  %-24s %s\n" "IP:"       "$CT_IP"
+        printf "  %-24s %s\n" "Gateway:"  "$CT_GW"
     fi
-    printf "  %-24s %s\n" "R2 Bucket:"       "$R2_BUCKET"
-    printf "  %-24s %s\n" "R2 Account ID:"   "$R2_ACCOUNT_ID"
-    printf "  %-24s %s\n" "R2 Jurisdiction:" "$jurisdiction"
-    printf "  %-24s %s\n" "Samba user:"      "$SAMBA_USER"
-    printf "  %-24s %s\n" "SMB share:"       "\\\\<CT-IP>\\${R2_BUCKET}"
-    printf "  %-24s %s\n" "Web UI user:"     "$WEB_ADMIN_USER"
-    printf "  %-24s %s\n" "Web UI URL:"      "http://<CT-IP>:8080"
+    printf "  %-24s %s\n" "Web UI user:"  "$WEB_ADMIN_USER"
+    printf "  %-24s %s\n" "Web UI URL:"   "http://<CT-IP>:8080"
     echo
     ask "Does this look correct? Continue? [y/N]"
     read -r _confirm
@@ -201,7 +151,7 @@ get_template() {
     local avail
     avail=$(pveam available --section system 2>/dev/null \
         | awk '/debian-13-standard/ {print $2; exit}')
-    [[ -z "$avail" ]] && error "No debian-13-standard template found. Check that the Proxmox node has internet access."
+    [[ -z "$avail" ]] && error "No debian-13-standard template found. Check internet access on the Proxmox node."
 
     info "Downloading template: $avail"
     pveam download "$TEMPLATE_STORAGE" "$avail" >&2
@@ -274,37 +224,9 @@ install_packages() {
     exec_ct "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq s3fs samba samba-common-bin curl fuse python3-flask"
 }
 
-setup_credentials() {
-    step "Storing R2 credentials..."
-    local cred_file="/etc/r2-credentials-${R2_BUCKET}"
-    exec_ct "printf '%s:%s\n' '${R2_ACCESS_KEY_ID}' '${R2_SECRET_ACCESS_KEY}' > '${cred_file}' && chmod 600 '${cred_file}'"
-}
-
-setup_mount() {
-    step "Configuring s3fs mount..."
-    local r2_url="https://${R2_ACCOUNT_ID}.${R2_REGION}r2.cloudflarestorage.com"
-    local cred_file="/etc/r2-credentials-${R2_BUCKET}"
-    local mount_point="/mnt/r2-${R2_BUCKET}"
-    local cache_dir="/var/cache/s3fs/${R2_BUCKET}"
-    local fstab_opts="passwd_file=${cred_file},url=${r2_url},use_path_request_style"
-    fstab_opts+=",allow_other,umask=0022,uid=0,gid=0"
-    fstab_opts+=",use_cache=${cache_dir},parallel_count=8,multipart_size=64,ensure_diskfree=2048"
-
-    exec_ct "mkdir -p '${mount_point}' '${cache_dir}'"
-    exec_ct "grep -q '^user_allow_other' /etc/fuse.conf 2>/dev/null || echo 'user_allow_other' >> /etc/fuse.conf"
-    exec_ct "grep -qF 's3fs#${R2_BUCKET}' /etc/fstab || \
-        echo 's3fs#${R2_BUCKET} ${mount_point} fuse _netdev,${fstab_opts} 0 0' >> /etc/fstab"
-
-    info "Testing R2 bucket mount..."
-    exec_ct "systemctl daemon-reload && mount '${mount_point}'" \
-        || error "s3fs mount failed. Check R2_ACCOUNT_ID, keys, and that the bucket exists."
-    info "Mount OK."
-}
-
 configure_samba() {
-    step "Configuring Samba..."
-    local mount_point="/mnt/r2-${R2_BUCKET}"
-    pct exec "$VMID" -- bash -c "cat > /etc/samba/smb.conf" <<EOF
+    step "Writing base Samba config..."
+    pct exec "$VMID" -- bash -c "cat > /etc/samba/smb.conf" <<'EOF'
 [global]
    workgroup = WORKGROUP
    server string = R2 SMB Gateway
@@ -318,29 +240,10 @@ configure_samba() {
    max xmit = 65535
    dead time = 15
    getwd cache = yes
-
-[${R2_BUCKET}]
-   path = ${mount_point}
-   browseable = yes
-   read only = no
-   guest ok = no
-   valid users = ${SAMBA_USER}
-   create mask = 0644
-   directory mask = 0755
-   force user = root
 EOF
-    info "smb.conf written."
-}
-
-setup_samba_user() {
-    step "Creating Samba user '${SAMBA_USER}'..."
-    exec_ct "id -u '${SAMBA_USER}' &>/dev/null || useradd -M -s /sbin/nologin '${SAMBA_USER}'"
-    exec_ct "printf '%s\n%s\n' '${SAMBA_PASSWORD}' '${SAMBA_PASSWORD}' | smbpasswd -a -s '${SAMBA_USER}'"
-}
-
-start_services() {
-    step "Starting Samba services..."
+    exec_ct "grep -q '^user_allow_other' /etc/fuse.conf 2>/dev/null || echo 'user_allow_other' >> /etc/fuse.conf"
     exec_ct "systemctl enable smbd nmbd && systemctl restart smbd nmbd"
+    info "Samba configured."
 }
 
 setup_autologin() {
@@ -352,7 +255,6 @@ ExecStart=
 ExecStart=-/sbin/agetty --autologin root --noclear %I linux
 EOF
     exec_ct "systemctl daemon-reload"
-    info "Auto-login configured."
 }
 
 setup_web_ui() {
@@ -418,19 +320,12 @@ print_summary() {
     echo -e "${GREEN}╠══════════════════════════════════════════════════════════╣${NC}"
     printf "${GREEN}║${NC}  CT ID:       %-41s${GREEN}║${NC}\n" "$VMID ($CT_HOSTNAME)"
     printf "${GREEN}║${NC}  IP:          %-41s${GREEN}║${NC}\n" "$lxc_ip"
-    printf "${GREEN}║${NC}  SMB share:   %-41s${GREEN}║${NC}\n" "\\\\${lxc_ip}\\${R2_BUCKET}"
-    printf "${GREEN}║${NC}  SMB user:    %-41s${GREEN}║${NC}\n" "$SAMBA_USER"
     printf "${GREEN}║${NC}  Web UI:      %-41s${GREEN}║${NC}\n" "http://${lxc_ip}:8080"
     printf "${GREEN}║${NC}  Web login:   %-41s${GREEN}║${NC}\n" "${WEB_ADMIN_USER} / ${WEB_ADMIN_PASSWORD}"
     echo -e "${GREEN}╠══════════════════════════════════════════════════════════╣${NC}"
-    echo -e "${GREEN}║  Add to Veeam:                                           ║${NC}"
-    echo -e "${GREEN}║  Backup Infrastructure → Backup Repositories →           ║${NC}"
-    echo -e "${GREEN}║  Add Repository → Network attached storage → SMB share   ║${NC}"
+    echo -e "${GREEN}║  Open the web UI to add your first R2 share.             ║${NC}"
     echo -e "${GREEN}╚══════════════════════════════════════════════════════════╝${NC}"
     echo
-    echo "Test from Windows PowerShell:"
-    echo "  net use \\\\${lxc_ip}\\${R2_BUCKET} /user:${SAMBA_USER} ${SAMBA_PASSWORD}"
-    echo "  dir \\\\${lxc_ip}\\${R2_BUCKET}"
 }
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -448,11 +343,7 @@ main() {
     start_and_wait
     wait_for_dns
     install_packages
-    setup_credentials
-    setup_mount
     configure_samba
-    setup_samba_user
-    start_services
     setup_autologin
     setup_web_ui
     print_summary

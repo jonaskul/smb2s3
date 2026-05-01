@@ -5,12 +5,14 @@ Creates a Debian 13 LXC on Proxmox that mounts a Cloudflare R2 bucket via s3fs a
 ## What the script does
 
 1. Auto-detects the Proxmox environment (VMID, storage, bridge)
-2. Runs an interactive wizard for R2 credentials, network settings, Samba password, and web UI credentials
+2. Runs a minimal wizard — network mode and web UI credentials only
 3. Downloads the Debian 13 template if not already present locally
 4. Creates and starts a privileged LXC with FUSE support
-5. Installs and configures s3fs + Samba inside the container
-6. Sets up a web management UI (Flask, port 8080) for managing multiple shares
-7. Prints the finished SMB path, web UI URL, and a PowerShell test command
+5. Installs s3fs, Samba, and Python/Flask inside the container
+6. Sets up a web management UI (port 8080) for adding and managing R2 shares
+7. Prints the web UI URL and login credentials
+
+R2 buckets and SMB shares are configured through the web UI after setup — no credentials needed in the wizard.
 
 ## Requirements
 
@@ -32,13 +34,6 @@ The wizard will prompt for:
 |---|---|
 | Network mode | `dhcp` (default) or `static` |
 | IP + gateway | Static mode only |
-| R2 Access Key ID | From the Cloudflare dashboard |
-| R2 Secret Access Key | From the Cloudflare dashboard |
-| R2 Account ID | ID only, not the full URL |
-| EU jurisdiction | `Y` (default) or `n` |
-| R2 Bucket name | Must match the exact name in Cloudflare R2 |
-| Samba username | `veeambackup` (default) |
-| Samba password | |
 | Web UI admin username | `admin` (default) |
 | Web UI admin password | |
 
@@ -61,10 +56,11 @@ The token must have **Object Read & Write** permission scoped to the specific bu
 
 ## Adding to Veeam
 
-1. **Backup Infrastructure → Backup Repositories → Add Repository**
-2. Select **Network attached storage → SMB share**
-3. UNC path: `\\<CT-IP>\<bucket-name>`
-4. Credentials: the username and password set in the wizard
+1. Open the web UI and add a share — note the bucket name and Samba credentials you set
+2. **Backup Infrastructure → Backup Repositories → Add Repository**
+3. Select **Network attached storage → SMB share**
+4. UNC path: `\\<CT-IP>\<bucket-name>`
+5. Credentials: the Samba username and password set in the web UI
 
 ## Notes
 
