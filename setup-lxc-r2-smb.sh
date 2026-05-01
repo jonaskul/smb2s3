@@ -175,7 +175,7 @@ create_container() {
         --net0       "$net0" \
         --nameserver "$CT_DNS" \
         --unprivileged 0 \
-        --features   "fuse=1" \
+        --features   "fuse=1,nesting=1" \
         --onboot     1 \
         --start      0
 
@@ -221,7 +221,7 @@ wait_for_dns() {
 
 install_packages() {
     step "Installing packages (s3fs, samba, python3-flask)..."
-    exec_ct "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq s3fs samba samba-common-bin curl fuse python3-flask"
+    exec_ct "LANG=C LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get update -qq && LANG=C LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get install -y -qq s3fs samba samba-common-bin curl fuse python3-flask"
 }
 
 configure_samba() {
