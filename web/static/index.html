@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>smb2s3</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <!-- Login -->
+  <div id="login-view">
+    <div class="login-card">
+      <h1>smb2s3</h1>
+      <p class="subtitle">R2 → SMB Gateway</p>
+      <form id="login-form" autocomplete="on">
+        <input type="text" id="login-user" name="username" placeholder="Username" autocomplete="username" required>
+        <input type="password" id="login-pass" name="password" placeholder="Password" autocomplete="current-password" required>
+        <button type="submit">Sign in</button>
+        <p id="login-error" class="error-msg" hidden></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard-view" hidden>
+    <header class="topbar">
+      <span class="topbar-title">smb2s3</span>
+      <div class="topbar-actions">
+        <button id="add-btn" class="btn-primary">+ Add Share</button>
+        <button id="logout-btn" class="btn-ghost">Sign out</button>
+      </div>
+    </header>
+    <main>
+      <div id="shares-grid"></div>
+      <p id="empty-msg" hidden>No shares configured yet. Click <strong>+ Add Share</strong> to get started.</p>
+    </main>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal-overlay" hidden>
+    <div class="modal-card">
+      <h2 id="modal-title">Add Share</h2>
+
+      <form id="share-form" autocomplete="off">
+        <div class="form-group" id="name-group">
+          <label for="f-name">Share / bucket name</label>
+          <input type="text" id="f-name" name="name" pattern="[a-zA-Z0-9][a-zA-Z0-9_.\-]{0,62}" placeholder="my-bucket" required>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="f-account">R2 Account ID</label>
+            <input type="text" id="f-account" name="account_id" placeholder="abc123..." required>
+          </div>
+          <div class="form-group form-group--check">
+            <label><input type="checkbox" id="f-eu" name="eu" checked> EU jurisdiction</label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="f-key">Access Key ID</label>
+          <input type="text" id="f-key" name="access_key_id" placeholder="Access Key ID" required>
+        </div>
+
+        <div class="form-group">
+          <label for="f-secret">Secret Access Key</label>
+          <input type="text" id="f-secret" name="secret_access_key" placeholder="Secret Access Key" required>
+        </div>
+
+        <hr>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="f-samba-user">Samba username</label>
+            <input type="text" id="f-samba-user" name="samba_user" placeholder="veeambackup" required>
+          </div>
+          <div class="form-group">
+            <label for="f-samba-pw">Samba password</label>
+            <input type="text" id="f-samba-pw" name="samba_password" placeholder="Password" required>
+          </div>
+        </div>
+
+        <p id="modal-error" class="error-msg" hidden></p>
+
+        <div class="modal-actions">
+          <button type="button" id="modal-cancel" class="btn-ghost">Cancel</button>
+          <button type="submit" id="modal-submit" class="btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

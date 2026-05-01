@@ -5,11 +5,12 @@ Creates a Debian 13 LXC on Proxmox that mounts a Cloudflare R2 bucket via s3fs a
 ## What the script does
 
 1. Auto-detects the Proxmox environment (VMID, storage, bridge)
-2. Runs an interactive wizard for R2 credentials, network settings, and Samba password
+2. Runs an interactive wizard for R2 credentials, network settings, Samba password, and web UI credentials
 3. Downloads the Debian 13 template if not already present locally
 4. Creates and starts a privileged LXC with FUSE support
 5. Installs and configures s3fs + Samba inside the container
-6. Prints the finished SMB path and a PowerShell test command
+6. Sets up a web management UI (Flask, port 8080) for managing multiple shares
+7. Prints the finished SMB path, web UI URL, and a PowerShell test command
 
 ## Requirements
 
@@ -38,8 +39,21 @@ The wizard will prompt for:
 | R2 Bucket name | Must match the exact name in Cloudflare R2 |
 | Samba username | `veeambackup` (default) |
 | Samba password | |
+| Web UI admin username | `admin` (default) |
+| Web UI admin password | |
 
 A confirmation summary is shown before anything is created.
+
+## Web management UI
+
+After setup, a browser-based UI is available at `http://<CT-IP>:8080`. It allows you to:
+
+- View all configured SMB shares and their mount status
+- Add new R2 shares (each with its own bucket, credentials, and Samba user)
+- Edit existing shares (update credentials, account ID, or Samba password)
+- Delete shares (unmounts, removes from fstab and smb.conf)
+
+Login with the web UI credentials set during the wizard.
 
 ## Cloudflare R2 API token requirements
 
@@ -58,3 +72,4 @@ The token must have **Object Read & Write** permission scoped to the specific bu
 - `force user = root` in the Samba config is necessary because the s3fs mount is owned by root
 - Do not configure lifecycle rules on the R2 bucket — Veeam manages deletion of backup files itself
 - The container auto-logs in as root on the console (Proxmox Shell button)
+- Each share uses a separate credential file `/etc/r2-credentials-{name}` and mount point `/mnt/r2-{name}`
