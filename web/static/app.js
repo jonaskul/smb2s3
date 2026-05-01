@@ -71,12 +71,18 @@
     showLogin();
   });
 
-  function showLogin() {
+  function showLogin(reason) {
     stopStats();
     dashView.hidden = true;
     loginView.hidden = false;
+    loginSubmit.disabled = false;
+    loginSubmit.textContent = "Sign in";
     document.getElementById("login-user").value = "";
     document.getElementById("login-pass").value = "";
+    if (reason) {
+      loginError.textContent = reason;
+      loginError.hidden = false;
+    }
   }
 
   function showDashboard() {
@@ -92,7 +98,7 @@
       const shares = await api("GET", "/api/shares");
       renderShares(shares);
     } catch (err) {
-      if (err.status === 401) { showLogin(); return; }
+      if (err.status === 401) { showLogin("Session expired — please log in again."); return; }
       sharesGrid.innerHTML = `<p class="error-msg">Failed to load shares: ${err.message}</p>`;
     }
   }
@@ -307,7 +313,7 @@
           <span class="cache-size">${(sh.cache_bytes / 1048576).toFixed(0)} MB cached</span>
         </div>`).join("");
     } catch (e) {
-      if (e.status === 401) { stopStats(); showLogin(); }
+      if (e.status === 401) { showLogin("Session expired — please log in again."); }
     }
   }
 
