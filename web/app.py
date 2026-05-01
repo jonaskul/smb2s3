@@ -61,6 +61,35 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 
 
+def _ensure_mount_service():
+    path = "/etc/systemd/system/smb2s3-mount.service"
+    content = """\
+[Unit]
+Description=Mount smb2s3 R2 shares
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/mount -a -t fuse.s3fs
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+"""
+    try:
+        existing = open(path).read() if os.path.exists(path) else ""
+        if existing != content:
+            with open(path, "w") as f:
+                f.write(content)
+            subprocess.run(["systemctl", "daemon-reload"], check=False)
+            subprocess.run(["systemctl", "enable", "--now", "smb2s3-mount.service"], check=False)
+    except Exception:
+        pass
+
+_ensure_mount_service()
+
+
 # ─── Auth ─────────────────────────────────────────────────────────────────────
 
 def require_login(f):
@@ -161,7 +190,7 @@ def _fstab_line(name: str, url: str) -> str:
     cache = f"{CACHE_PREFIX}{name}"
     mount = f"{MOUNT_PREFIX}{name}"
     opts = S3FS_OPTS.format(cred=cred, url=url, cache=cache)
-    return f"s3fs#{name} {mount} fuse _netdev,{opts} 0 0\n"
+    return f"s3fs#{name} {mount} fuse _netdev,nofail,{opts} 0 0\n"
 
 
 def _r2_url(account_id: str, eu: bool) -> str:
