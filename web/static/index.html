@@ -28,6 +28,7 @@
       <span class="topbar-title">smb2s3</span>
       <div class="topbar-actions">
         <button id="add-btn" class="btn-primary">+ Add Share</button>
+        <button id="settings-btn" class="btn-ghost">⚙ Settings</button>
         <button id="logout-btn" class="btn-ghost">Sign out</button>
       </div>
     </header>
@@ -126,6 +127,42 @@
           <button type="submit" id="modal-submit" class="btn-primary">Save</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Settings modal -->
+  <div id="settings-overlay" hidden>
+    <div class="modal-card">
+      <h2>Settings</h2>
+      <div class="settings-section">
+        <div class="settings-section__title">SNMP Monitoring</div>
+        <p class="settings-section__desc">
+          Allows Zabbix (or any NMS) to poll this host using the
+          <strong>Linux by SNMP</strong> template on UDP port 161.
+        </p>
+        <div class="form-group form-group--check">
+          <label><input type="checkbox" id="s-snmp-enabled"> Enable SNMP (installs snmpd)</label>
+        </div>
+        <div id="snmp-fields">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="s-snmp-community">Community string</label>
+              <input type="text" id="s-snmp-community" placeholder="public">
+            </div>
+            <div class="form-group">
+              <label for="s-snmp-allowed">Allowed host / CIDR</label>
+              <input type="text" id="s-snmp-allowed" placeholder="192.168.1.10 (empty = any)">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p id="settings-error" class="error-msg" hidden></p>
+
+      <div class="modal-actions">
+        <button type="button" id="settings-cancel" class="btn-ghost">Cancel</button>
+        <button type="button" id="settings-save" class="btn-primary">Save</button>
+      </div>
     </div>
   </div>
 

@@ -46,6 +46,15 @@ def _load_conf():
     return cfg
 
 
+def _save_conf_keys(updates: dict):
+    cfg = _load_conf()
+    cfg.update(updates)
+    with open(ADMIN_CONF, "w") as f:
+        for k, v in cfg.items():
+            f.write(f"{k}={v}\n")
+    os.chmod(ADMIN_CONF, 0o600)
+
+
 _cfg = _load_conf()
 app.secret_key = _cfg["session_secret"]
 app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
@@ -504,6 +513,61 @@ def delete_share(name):
 
         _run("systemctl", "daemon-reload")
         _run("systemctl", "reload", "smbd")
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify({"ok": True})
+
+
+# ─── API: settings ────────────────────────────────────────────────────────────
+
+SNMP_CONF = "/etc/snmp/snmpd.conf"
+
+
+def _apply_snmp(enabled: bool, community: str, allowed: str):
+    if enabled:
+        _run("apt-get", "install", "-y", "-qq", "snmpd")
+        source = f" {allowed}" if allowed else ""
+        conf = (
+            "agentAddress udp:161\n"
+            f"rocommunity {community}{source}\n"
+            "sysLocation LXC r2-smb\n"
+            "sysContact root@localhost\n"
+        )
+        with open(SNMP_CONF, "w") as f:
+            f.write(conf)
+        _run("systemctl", "enable", "snmpd")
+        _run("systemctl", "restart", "snmpd")
+    else:
+        _run("systemctl", "disable", "--now", "snmpd", check=False)
+
+
+@app.route("/api/settings")
+@require_login
+def get_settings():
+    cfg = _load_conf()
+    return jsonify({
+        "snmp_enabled":   cfg.get("snmp_enabled", "false") == "true",
+        "snmp_community": cfg.get("snmp_community", "public"),
+        "snmp_allowed":   cfg.get("snmp_allowed", ""),
+    })
+
+
+@app.route("/api/settings", methods=["POST"])
+@require_login
+def save_settings():
+    data = request.get_json(silent=True) or {}
+    snmp_enabled  = bool(data.get("snmp_enabled", False))
+    community     = re.sub(r"[^a-zA-Z0-9_-]", "", data.get("snmp_community", "public")) or "public"
+    allowed       = re.sub(r"[^a-zA-Z0-9._:/\-]", "", data.get("snmp_allowed", "").strip())
+
+    try:
+        _apply_snmp(snmp_enabled, community, allowed)
+        _save_conf_keys({
+            "snmp_enabled":   "true" if snmp_enabled else "false",
+            "snmp_community": community,
+            "snmp_allowed":   allowed,
+        })
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 500
 

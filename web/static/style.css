@@ -447,3 +447,45 @@ hr {
 }
 .cache-name { flex: 1; font-weight: 500; }
 .cache-size { color: var(--text-muted); font-size: 0.8rem; }
+
+/* ─── Settings overlay ───────────────────────────────────────────────────────── */
+
+#settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 100;
+}
+#settings-overlay[hidden] { display: none; }
+
+.settings-section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.settings-section__title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+
+.settings-section__desc {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+#snmp-fields {
+  transition: opacity 0.2s;
+}

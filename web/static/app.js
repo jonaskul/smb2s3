@@ -333,6 +333,70 @@
       .replace(/"/g, "&quot;");
   }
 
+  // ─── Settings ───────────────────────────────────────────────────────────────
+  const settingsOverlay = document.getElementById("settings-overlay");
+  const settingsCancel  = document.getElementById("settings-cancel");
+  const settingsSave    = document.getElementById("settings-save");
+  const settingsError   = document.getElementById("settings-error");
+  const sSnmpEnabled    = document.getElementById("s-snmp-enabled");
+  const sSnmpCommunity  = document.getElementById("s-snmp-community");
+  const sSnmpAllowed    = document.getElementById("s-snmp-allowed");
+  const snmpFields      = document.getElementById("snmp-fields");
+
+  document.getElementById("settings-btn").addEventListener("click", openSettings);
+  settingsCancel.addEventListener("click", closeSettings);
+  settingsOverlay.addEventListener("click", (e) => { if (e.target === settingsOverlay) closeSettings(); });
+
+  sSnmpEnabled.addEventListener("change", () => {
+    snmpFields.style.opacity = sSnmpEnabled.checked ? "1" : "0.4";
+    snmpFields.querySelectorAll("input").forEach((i) => (i.disabled = !sSnmpEnabled.checked));
+  });
+
+  async function openSettings() {
+    settingsError.hidden = true;
+    settingsSave.disabled = true;
+    settingsSave.textContent = "Loading…";
+    settingsOverlay.hidden = false;
+    try {
+      const cfg = await api("GET", "/api/settings");
+      sSnmpEnabled.checked       = cfg.snmp_enabled;
+      sSnmpCommunity.value       = cfg.snmp_community;
+      sSnmpAllowed.value         = cfg.snmp_allowed;
+      snmpFields.style.opacity   = cfg.snmp_enabled ? "1" : "0.4";
+      snmpFields.querySelectorAll("input").forEach((i) => (i.disabled = !cfg.snmp_enabled));
+    } catch (err) {
+      settingsError.textContent = err.message;
+      settingsError.hidden = false;
+    } finally {
+      settingsSave.disabled = false;
+      settingsSave.textContent = "Save";
+    }
+  }
+
+  function closeSettings() {
+    settingsOverlay.hidden = true;
+  }
+
+  settingsSave.addEventListener("click", async () => {
+    settingsError.hidden = true;
+    settingsSave.disabled = true;
+    settingsSave.textContent = "Saving…";
+    try {
+      await api("POST", "/api/settings", {
+        snmp_enabled:   sSnmpEnabled.checked,
+        snmp_community: sSnmpCommunity.value.trim(),
+        snmp_allowed:   sSnmpAllowed.value.trim(),
+      });
+      closeSettings();
+    } catch (err) {
+      settingsError.textContent = err.message;
+      settingsError.hidden = false;
+    } finally {
+      settingsSave.disabled = false;
+      settingsSave.textContent = "Save";
+    }
+  });
+
   // ─── Init ───────────────────────────────────────────────────────────────────
   // Try to load shares — if 401, stay on login page
   api("GET", "/api/shares")
