@@ -32,6 +32,44 @@
       </div>
     </header>
     <main>
+      <div id="stats-section">
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-card__title">Network</div>
+            <div class="stat-speeds">
+              <span class="speed-item">↑ <strong id="tx-speed">—</strong></span>
+              <span class="speed-item">↓ <strong id="rx-speed">—</strong></span>
+            </div>
+            <div class="stat-totals">
+              <span>Total sent: <span id="tx-total">—</span></span>
+              <span>Total received: <span id="rx-total">—</span></span>
+            </div>
+            <svg class="sparkline" viewBox="0 0 300 60" preserveAspectRatio="none">
+              <polyline id="tx-line" class="sparkline__tx" points="" fill="none"/>
+              <polyline id="rx-line" class="sparkline__rx" points="" fill="none"/>
+            </svg>
+            <div class="sparkline-legend">
+              <span class="legend-tx">▲ TX (upload)</span>
+              <span class="legend-rx">▼ RX (download)</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-card__title">System</div>
+            <div class="sys-row">
+              <span>Memory</span>
+              <div class="bar-wrap"><div class="bar" id="mem-bar"></div></div>
+              <span id="mem-label">—</span>
+            </div>
+            <div class="sys-row">
+              <span>Load</span>
+              <span id="load-label">—</span>
+            </div>
+          </div>
+        </div>
+        <div id="cache-rows"></div>
+      </div>
+
       <div id="shares-grid"></div>
       <p id="empty-msg" hidden>No shares configured yet. Click <strong>+ Add Share</strong> to get started.</p>
     </main>

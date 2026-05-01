@@ -4,6 +4,7 @@ import re
 import secrets
 import shutil
 import subprocess
+import time
 from functools import wraps
 
 from flask import Flask, jsonify, request, send_from_directory, session
@@ -267,6 +268,75 @@ def _unmount(name: str):
     r = _run("fusermount", "-u", mount, check=False)
     if r.returncode != 0:
         _run("umount", "-l", mount, check=False)
+
+
+# ─── API: stats ───────────────────────────────────────────────────────────────
+
+def _net_stats():
+    try:
+        with open("/proc/net/dev") as f:
+            for line in f:
+                if "eth0" in line:
+                    fields = line.split(":")[1].split()
+                    return {"rx_bytes": int(fields[0]), "tx_bytes": int(fields[8])}
+    except Exception:
+        pass
+    return {"rx_bytes": 0, "tx_bytes": 0}
+
+
+def _mem_stats():
+    try:
+        data = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                k, _, v = line.partition(":")
+                data[k.strip()] = int(v.split()[0])
+        total = data.get("MemTotal", 0)
+        avail = data.get("MemAvailable", 0)
+        used  = total - avail
+        return {
+            "total_mb": round(total / 1024),
+            "used_mb":  round(used  / 1024),
+            "pct":      round(used / total * 100) if total else 0,
+        }
+    except Exception:
+        return {"total_mb": 0, "used_mb": 0, "pct": 0}
+
+
+@app.route("/api/stats")
+@require_login
+def get_stats():
+    sections = _parse_smb_conf()
+    shares = []
+    for name in sections:
+        cache_path = f"{CACHE_PREFIX}{name}"
+        cache_bytes = 0
+        try:
+            result = _run("du", "-sb", cache_path, check=False)
+            if result.returncode == 0:
+                cache_bytes = int(result.stdout.split()[0])
+        except Exception:
+            pass
+        shares.append({
+            "name": name,
+            "mounted": _is_mounted(name),
+            "cache_bytes": cache_bytes,
+        })
+
+    load = 0.0
+    try:
+        with open("/proc/loadavg") as f:
+            load = float(f.read().split()[0])
+    except Exception:
+        pass
+
+    return jsonify({
+        "timestamp": time.time(),
+        "network": _net_stats(),
+        "memory": _mem_stats(),
+        "load_1": load,
+        "shares": shares,
+    })
 
 
 # ─── API: shares ──────────────────────────────────────────────────────────────

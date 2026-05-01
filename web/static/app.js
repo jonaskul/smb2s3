@@ -72,6 +72,7 @@
   });
 
   function showLogin() {
+    stopStats();
     dashView.hidden = true;
     loginView.hidden = false;
     document.getElementById("login-user").value = "";
@@ -82,6 +83,7 @@
     loginView.hidden = true;
     dashView.hidden = false;
     loadShares();
+    startStats();
   }
 
   // ─── Shares list ────────────────────────────────────────────────────────────
@@ -229,6 +231,97 @@
     } catch (err) {
       alert(`Failed to delete share: ${err.message}`);
     }
+  }
+
+  // ─── Stats ──────────────────────────────────────────────────────────────────
+  const HISTORY = 60;
+  const statsHistory = { tx: [], rx: [] };
+  let prevNet = null;
+  let statsTimer = null;
+
+  function fmtSpeed(b) {
+    if (b < 1024) return b.toFixed(0) + " B/s";
+    if (b < 1048576) return (b / 1024).toFixed(1) + " KB/s";
+    return (b / 1048576).toFixed(2) + " MB/s";
+  }
+
+  function fmtTotal(b) {
+    if (b < 1073741824) return (b / 1048576).toFixed(0) + " MB";
+    return (b / 1073741824).toFixed(2) + " GB";
+  }
+
+  function drawSparkline(id, data, maxVal) {
+    const el = document.getElementById(id);
+    if (!el || data.length < 2) { el && el.setAttribute("points", ""); return; }
+    const w = 300, h = 60, pad = 4;
+    const mx = maxVal || 1;
+    const pts = data.map((v, i) => {
+      const x = pad + (i / (HISTORY - 1)) * (w - pad * 2);
+      const y = h - pad - (v / mx) * (h - pad * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(" ");
+    el.setAttribute("points", pts);
+  }
+
+  async function pollStats() {
+    try {
+      const s = await api("GET", "/api/stats");
+
+      if (prevNet) {
+        const dt = Math.max(s.timestamp - prevNet.ts, 0.1);
+        const txRate = (s.network.tx_bytes - prevNet.tx) / dt;
+        const rxRate = (s.network.rx_bytes - prevNet.rx) / dt;
+
+        statsHistory.tx.push(Math.max(txRate, 0));
+        statsHistory.rx.push(Math.max(rxRate, 0));
+        if (statsHistory.tx.length > HISTORY) statsHistory.tx.shift();
+        if (statsHistory.rx.length > HISTORY) statsHistory.rx.shift();
+
+        document.getElementById("tx-speed").textContent = fmtSpeed(txRate);
+        document.getElementById("rx-speed").textContent = fmtSpeed(rxRate);
+
+        const maxRate = Math.max(...statsHistory.tx, ...statsHistory.rx, 1);
+        drawSparkline("tx-line", statsHistory.tx, maxRate);
+        drawSparkline("rx-line", statsHistory.rx, maxRate);
+      }
+
+      prevNet = { tx: s.network.tx_bytes, rx: s.network.rx_bytes, ts: s.timestamp };
+      document.getElementById("tx-total").textContent = fmtTotal(s.network.tx_bytes);
+      document.getElementById("rx-total").textContent = fmtTotal(s.network.rx_bytes);
+
+      const mem = s.memory;
+      document.getElementById("mem-label").textContent =
+        `${mem.used_mb} / ${mem.total_mb} MB (${mem.pct}%)`;
+      const memBar = document.getElementById("mem-bar");
+      memBar.style.width = `${mem.pct}%`;
+      memBar.className = "bar" + (mem.pct > 85 ? " bar--warn" : "");
+
+      document.getElementById("load-label").textContent = s.load_1.toFixed(2);
+
+      document.getElementById("cache-rows").innerHTML = s.shares.map((sh) => `
+        <div class="cache-row">
+          <span class="cache-name">${esc(sh.name)}</span>
+          <span class="badge ${sh.mounted ? "badge--mounted" : "badge--unmounted"}">
+            ${sh.mounted ? "mounted" : "unmounted"}
+          </span>
+          <span class="cache-size">${(sh.cache_bytes / 1048576).toFixed(0)} MB cached</span>
+        </div>`).join("");
+    } catch (e) {
+      if (e.status === 401) { stopStats(); showLogin(); }
+    }
+  }
+
+  function startStats() {
+    prevNet = null;
+    statsHistory.tx.length = 0;
+    statsHistory.rx.length = 0;
+    pollStats();
+    statsTimer = setInterval(pollStats, 3000);
+  }
+
+  function stopStats() {
+    clearInterval(statsTimer);
+    statsTimer = null;
   }
 
   // ─── Utils ──────────────────────────────────────────────────────────────────
