@@ -248,13 +248,13 @@ EOF
 
 setup_autologin() {
     step "Configuring root auto-login on console..."
-    exec_ct "mkdir -p /etc/systemd/system/container-getty@1.service.d"
-    pct exec "$VMID" -- bash -c "cat > /etc/systemd/system/container-getty@1.service.d/autologin.conf" <<'EOF'
+    exec_ct "mkdir -p /etc/systemd/system/console-getty.service.d"
+    pct exec "$VMID" -- bash -c "cat > /etc/systemd/system/console-getty.service.d/autologin.conf" <<'EOF'
 [Service]
 ExecStart=
-ExecStart=-/sbin/agetty --autologin root --noclear %I linux
+ExecStart=-/sbin/agetty --autologin root --noclear console linux
 EOF
-    exec_ct "systemctl daemon-reload && systemctl restart 'container-getty@1.service' || true"
+    exec_ct "systemctl daemon-reload && systemctl restart console-getty || true"
 }
 
 setup_web_ui() {
