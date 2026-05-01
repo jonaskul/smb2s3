@@ -36,14 +36,22 @@
     if (body !== undefined) opts.body = JSON.stringify(body);
     const res = await fetch(path, opts);
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+    if (!res.ok) {
+      const err = new Error(json.error || `HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
     return json;
   }
 
   // ─── Login ──────────────────────────────────────────────────────────────────
+  const loginSubmit = loginForm.querySelector("button[type=submit]");
+
   loginForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     loginError.hidden = true;
+    loginSubmit.disabled = true;
+    loginSubmit.textContent = "Signing in…";
     try {
       await api("POST", "/login", {
         username: document.getElementById("login-user").value,
@@ -53,6 +61,8 @@
     } catch (err) {
       loginError.textContent = err.message;
       loginError.hidden = false;
+      loginSubmit.disabled = false;
+      loginSubmit.textContent = "Sign in";
     }
   });
 
@@ -80,7 +90,7 @@
       const shares = await api("GET", "/api/shares");
       renderShares(shares);
     } catch (err) {
-      if (err.message.includes("401")) { showLogin(); return; }
+      if (err.status === 401) { showLogin(); return; }
       sharesGrid.innerHTML = `<p class="error-msg">Failed to load shares: ${err.message}</p>`;
     }
   }
