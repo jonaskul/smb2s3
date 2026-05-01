@@ -118,7 +118,7 @@
         </div>
         <div class="share-card__body">
           <span class="share-detail">Samba user: <strong>${esc(s.samba_user)}</strong></span>
-          <span class="share-detail">SMB path: <code>\\\\&lt;IP&gt;\\${esc(s.name)}</code></span>
+          <span class="share-detail">SMB path: <code>\\\\${window.location.hostname}\\${esc(s.name)}</code></span>
         </div>
         <div class="share-card__actions">
           <button class="btn-secondary btn-edit" data-name="${esc(s.name)}">Edit</button>
