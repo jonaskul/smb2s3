@@ -587,33 +587,39 @@ def update_share(name):
     return jsonify({"ok": True})
 
 
+def _iter_vfsmeta(name: str):
+    """Yield (meta_path, data_path) for every .vfsmeta file in the cache.
+
+    rclone co-locates metadata next to the data file inside vfs/:
+      vfs/some/path/file.ext          <- data
+      vfs/some/path/file.ext.vfsmeta  <- metadata
+    """
+    cache_dir = os.path.join(CACHE_PREFIX, name)
+    for root, _, files in os.walk(cache_dir):
+        for fname in files:
+            if fname.endswith(".vfsmeta"):
+                meta_path = os.path.join(root, fname)
+                data_path = meta_path[: -len(".vfsmeta")]
+                yield meta_path, data_path
+
+
 def _scan_cache(name: str) -> dict:
     """Inspect VFS cache metadata to find stale (uploaded) vs dirty (pending) files."""
-    meta_dir = os.path.join(CACHE_PREFIX, name, "vfs.meta")
-    data_dir = os.path.join(CACHE_PREFIX, name, "vfs")
     stale_bytes = dirty_bytes = stale_count = dirty_count = 0
-    if not os.path.isdir(meta_dir):
-        return {"stale_bytes": 0, "dirty_bytes": 0, "stale_count": 0, "dirty_count": 0}
-    for root, _, files in os.walk(meta_dir):
-        for fname in files:
-            if not fname.endswith(".vfsmeta"):
-                continue
-            meta_path = os.path.join(root, fname)
-            try:
-                with open(meta_path) as f:
-                    meta = json.load(f)
-                dirty = meta.get("Dirty", False)
-                rel = os.path.relpath(meta_path, meta_dir)
-                data_path = os.path.join(data_dir, rel[: -len(".vfsmeta")])
-                size = os.path.getsize(data_path) if os.path.exists(data_path) else 0
-                if dirty:
-                    dirty_bytes += size
-                    dirty_count += 1
-                else:
-                    stale_bytes += size
-                    stale_count += 1
-            except Exception:
-                pass
+    for meta_path, data_path in _iter_vfsmeta(name):
+        try:
+            with open(meta_path) as f:
+                meta = json.load(f)
+            dirty = meta.get("Dirty", False)
+            size = os.path.getsize(data_path) if os.path.exists(data_path) else 0
+            if dirty:
+                dirty_bytes += size
+                dirty_count += 1
+            else:
+                stale_bytes += size
+                stale_count += 1
+        except Exception:
+            pass
     return {
         "stale_bytes":  stale_bytes,
         "dirty_bytes":  dirty_bytes,
@@ -624,28 +630,18 @@ def _scan_cache(name: str) -> dict:
 
 def _clean_stale_files(name: str):
     """Delete cached files whose metadata shows Dirty=false (already uploaded)."""
-    meta_dir = os.path.join(CACHE_PREFIX, name, "vfs.meta")
-    data_dir = os.path.join(CACHE_PREFIX, name, "vfs")
-    if not os.path.isdir(meta_dir):
-        return
-    for root, _, files in os.walk(meta_dir, topdown=False):
-        for fname in files:
-            if not fname.endswith(".vfsmeta"):
-                continue
-            meta_path = os.path.join(root, fname)
-            try:
-                with open(meta_path) as f:
-                    meta = json.load(f)
-                if not meta.get("Dirty", False):
-                    rel = os.path.relpath(meta_path, meta_dir)
-                    data_path = os.path.join(data_dir, rel[: -len(".vfsmeta")])
-                    try:
-                        os.unlink(data_path)
-                    except FileNotFoundError:
-                        pass
-                    os.unlink(meta_path)
-            except Exception:
-                pass
+    for meta_path, data_path in _iter_vfsmeta(name):
+        try:
+            with open(meta_path) as f:
+                meta = json.load(f)
+            if not meta.get("Dirty", False):
+                try:
+                    os.unlink(data_path)
+                except FileNotFoundError:
+                    pass
+                os.unlink(meta_path)
+        except Exception:
+            pass
 
 
 @app.route("/api/shares/<name>/cache-status")
