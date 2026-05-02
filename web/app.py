@@ -101,16 +101,14 @@ def _write_mount_service(name: str):
 
 def _ensure_rclone_services():
     sections = _parse_smb_conf()
-    changed = False
+    written = False
     for name in sections:
-        svc_path = f"/etc/systemd/system/{_service_name(name)}"
-        if not os.path.exists(svc_path):
-            try:
-                _write_mount_service(name)
-                changed = True
-            except Exception:
-                pass
-    if changed:
+        try:
+            _write_mount_service(name)
+            written = True
+        except Exception:
+            pass
+    if written:
         subprocess.run(["systemctl", "daemon-reload"], check=False)
     for name in sections:
         svc = _service_name(name)
