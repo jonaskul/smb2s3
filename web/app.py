@@ -708,19 +708,46 @@ def cache_debug(name):
     if err:
         return err
     cache_dir = os.path.join(CACHE_PREFIX, name)
-    entries = []
-    for root, dirs, files in os.walk(cache_dir):
+    meta_dir  = os.path.join(cache_dir, "vfsMeta")
+    data_dir  = os.path.join(cache_dir, "vfs")
+
+    # Disk usage per top-level subdir
+    du = {}
+    for d in ("vfs", "vfsMeta"):
+        p = os.path.join(cache_dir, d)
+        try:
+            r = subprocess.run(["du", "-sb", p], capture_output=True, text=True)
+            du[d] = int(r.stdout.split()[0]) if r.returncode == 0 else -1
+        except Exception:
+            du[d] = -1
+
+    # Sample content of first vfsMeta file
+    sample = None
+    for root, _, files in os.walk(meta_dir):
         for fname in files:
-            full = os.path.join(root, fname)
-            rel  = os.path.relpath(full, cache_dir)
+            path = os.path.join(root, fname)
+            rel  = os.path.relpath(path, meta_dir)
             try:
-                size = os.path.getsize(full)
-            except OSError:
-                size = -1
-            entries.append({"path": rel, "size": size})
-        entries += [{"path": os.path.relpath(os.path.join(root, d), cache_dir) + "/", "size": 0}
-                    for d in dirs]
-    return jsonify({"cache_dir": cache_dir, "entries": entries[:100]})
+                raw = open(path, "rb").read(512)
+                try:
+                    sample = {"path": rel, "content": raw.decode("utf-8", errors="replace")}
+                except Exception:
+                    sample = {"path": rel, "content": repr(raw[:64])}
+            except Exception:
+                pass
+            break
+        if sample:
+            break
+
+    # Scan result
+    scan = _scan_cache(name)
+
+    return jsonify({
+        "cache_dir":    cache_dir,
+        "du":           du,
+        "vfsmeta_sample": sample,
+        "scan":         scan,
+    })
 
 
 @app.route("/api/shares/<name>/clean-cache", methods=["POST"])
