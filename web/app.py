@@ -62,7 +62,12 @@ def _service_name(name: str) -> str:
 
 
 def _write_mount_service(name: str):
-    cache_gb = int(_load_conf().get("vfs_cache_gb", "70"))
+    cfg          = _load_conf()
+    cache_gb     = int(cfg.get("vfs_cache_gb",  "70"))
+    transfers    = int(cfg.get("transfers",      "2"))
+    buffer_mb    = int(cfg.get("buffer_mb",      "64"))
+    write_back_s = int(cfg.get("write_back_s",   "5"))
+    checkers     = int(cfg.get("checkers",       "2"))
     conf  = f"{RCLONE_CONF_PFX}{name}.conf"
     mount = f"{MOUNT_PREFIX}{name}"
     cache = f"{CACHE_PREFIX}{name}"
@@ -79,9 +84,10 @@ def _write_mount_service(name: str):
         f" --vfs-cache-mode writes"
         f" --cache-dir {cache}"
         f" --vfs-cache-max-size {cache_gb}G"
-        f" --vfs-write-back 1s"
-        f" --buffer-size 256M"
-        f" --transfers 4"
+        f" --vfs-write-back {write_back_s}s"
+        f" --buffer-size {buffer_mb}M"
+        f" --transfers {transfers}"
+        f" --checkers {checkers}"
         f" --dir-cache-time 5m"
         f" --poll-interval 30s"
         f" --allow-other"
@@ -645,7 +651,11 @@ def get_settings():
         "snmp_enabled":   cfg.get("snmp_enabled", "false") == "true",
         "snmp_community": cfg.get("snmp_community", "public"),
         "snmp_allowed":   cfg.get("snmp_allowed", ""),
-        "vfs_cache_gb":   int(cfg.get("vfs_cache_gb", "4")),
+        "vfs_cache_gb":   int(cfg.get("vfs_cache_gb",  "70")),
+        "transfers":      int(cfg.get("transfers",      "2")),
+        "buffer_mb":      int(cfg.get("buffer_mb",      "64")),
+        "write_back_s":   int(cfg.get("write_back_s",   "5")),
+        "checkers":       int(cfg.get("checkers",       "2")),
     })
 
 
@@ -656,7 +666,11 @@ def save_settings():
     snmp_enabled  = bool(data.get("snmp_enabled", False))
     community     = re.sub(r"[^a-zA-Z0-9_-]", "", data.get("snmp_community", "public")) or "public"
     allowed       = re.sub(r"[^a-zA-Z0-9._:/\-]", "", data.get("snmp_allowed", "").strip())
-    vfs_cache_gb  = max(1, int(data.get("vfs_cache_gb", 50)))
+    vfs_cache_gb  = max(1, int(data.get("vfs_cache_gb", 70)))
+    transfers     = max(1, min(16,   int(data.get("transfers",    2))))
+    buffer_mb     = max(8, min(1024, int(data.get("buffer_mb",   64))))
+    write_back_s  = max(1, min(60,   int(data.get("write_back_s", 5))))
+    checkers      = max(1, min(16,   int(data.get("checkers",     2))))
 
     try:
         _apply_snmp(snmp_enabled, community, allowed)
@@ -665,6 +679,10 @@ def save_settings():
             "snmp_community": community,
             "snmp_allowed":   allowed,
             "vfs_cache_gb":   str(vfs_cache_gb),
+            "transfers":      str(transfers),
+            "buffer_mb":      str(buffer_mb),
+            "write_back_s":   str(write_back_s),
+            "checkers":       str(checkers),
         })
         # Regenerate and restart all mount services with new cache size
         sections = _parse_smb_conf()

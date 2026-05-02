@@ -362,6 +362,10 @@
   const settingsSave    = document.getElementById("settings-save");
   const settingsError   = document.getElementById("settings-error");
   const sVfsCacheGb     = document.getElementById("s-vfs-cache-gb");
+  const sTransfers      = document.getElementById("s-transfers");
+  const sCheckers       = document.getElementById("s-checkers");
+  const sBufferMb       = document.getElementById("s-buffer-mb");
+  const sWriteBackS     = document.getElementById("s-write-back-s");
   const sSnmpEnabled    = document.getElementById("s-snmp-enabled");
   const sSnmpCommunity  = document.getElementById("s-snmp-community");
   const sSnmpAllowed    = document.getElementById("s-snmp-allowed");
@@ -384,6 +388,10 @@
     try {
       const cfg = await api("GET", "/api/settings");
       sVfsCacheGb.value          = cfg.vfs_cache_gb;
+      sTransfers.value           = cfg.transfers;
+      sCheckers.value            = cfg.checkers;
+      sBufferMb.value            = cfg.buffer_mb;
+      sWriteBackS.value          = cfg.write_back_s;
       sSnmpEnabled.checked       = cfg.snmp_enabled;
       sSnmpCommunity.value       = cfg.snmp_community;
       sSnmpAllowed.value         = cfg.snmp_allowed;
@@ -408,7 +416,11 @@
     settingsSave.textContent = "Saving…";
     try {
       await api("POST", "/api/settings", {
-        vfs_cache_gb:   parseInt(sVfsCacheGb.value, 10) || 50,
+        vfs_cache_gb:   parseInt(sVfsCacheGb.value,  10) || 70,
+        transfers:      parseInt(sTransfers.value,    10) || 2,
+        checkers:       parseInt(sCheckers.value,     10) || 2,
+        buffer_mb:      parseInt(sBufferMb.value,     10) || 64,
+        write_back_s:   parseInt(sWriteBackS.value,   10) || 5,
         snmp_enabled:   sSnmpEnabled.checked,
         snmp_community: sSnmpCommunity.value.trim(),
         snmp_allowed:   sSnmpAllowed.value.trim(),

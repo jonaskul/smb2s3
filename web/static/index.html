@@ -154,6 +154,33 @@
       </div>
 
       <div class="settings-section">
+        <div class="settings-section__title">rclone Performance</div>
+        <p class="settings-section__desc">
+          Tune CPU and memory usage during transfers. Changing these restarts all active mounts.
+        </p>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="s-transfers">Transfers</label>
+            <input type="number" id="s-transfers" min="1" max="16" placeholder="2">
+          </div>
+          <div class="form-group">
+            <label for="s-checkers">Checkers</label>
+            <input type="number" id="s-checkers" min="1" max="16" placeholder="2">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="s-buffer-mb">Buffer per transfer (MB)</label>
+            <input type="number" id="s-buffer-mb" min="8" max="1024" placeholder="64">
+          </div>
+          <div class="form-group">
+            <label for="s-write-back-s">Write-back delay (s)</label>
+            <input type="number" id="s-write-back-s" min="1" max="60" placeholder="5">
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
         <div class="settings-section__title">SNMP Monitoring</div>
         <p class="settings-section__desc">
           Allows Zabbix (or any NMS) to poll this host using the
