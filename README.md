@@ -1,6 +1,6 @@
 # smb2s3
 
-Creates a Debian 13 LXC on Proxmox that mounts Cloudflare R2 buckets via s3fs and exposes them as SMB shares.
+Creates a Debian 13 LXC on Proxmox that mounts Cloudflare R2 buckets via rclone and exposes them as SMB shares.
 
 ## What the script does
 
@@ -8,7 +8,7 @@ Creates a Debian 13 LXC on Proxmox that mounts Cloudflare R2 buckets via s3fs an
 2. Runs a minimal wizard — network mode and web UI credentials only
 3. Downloads the Debian 13 template if not already present locally
 4. Creates and starts a privileged LXC with FUSE support
-5. Installs s3fs, Samba, and Python/Flask inside the container
+5. Installs rclone, Samba, and Python/Flask inside the container
 6. Sets up a web management UI (port 8080) for adding and managing R2 shares
 7. Configures root auto-login on the container console
 8. Prints the web UI URL and login credentials
@@ -49,21 +49,35 @@ After setup, a browser-based UI is available at `http://<CT-IP>:8080`. Log in wi
 - View all configured SMB shares and their mount status
 - Add new R2 shares — each with its own bucket, credentials, and Samba user
 - Edit existing shares (update credentials, account ID, or Samba password)
-- Delete shares (unmounts, removes from fstab and smb.conf)
+- Delete shares (stops the rclone service, removes from smb.conf, cleans up cache)
 
 ### Stats
 
-A live stats panel is always visible on the dashboard:
+A live stats panel is always visible on the dashboard (updates every 3 seconds):
 
-- **Network graph** — TX/RX throughput over the last ~3 minutes (updates every 3 seconds)
+- **Network graph** — TX/RX throughput over the last ~3 minutes
 - **System card** — memory usage bar and CPU load average
-- **Per-share cache** — mount status and local cache size for each share
+- **Per-share cache** — mount status and local VFS cache size for each share
+- **Watchdog log** — recent mount events (unmounts detected, remount attempts and results)
 
 ### Settings
 
 The ⚙ Settings button in the top bar provides:
 
+- **VFS cache size** — maximum local disk space per share used to buffer writes before upload to R2. Increase this if you need to write files larger than the current limit. Changing this restarts all active mounts.
 - **SNMP monitoring** — enable/disable `snmpd` with configurable community string and allowed host/CIDR. Compatible with the Zabbix **Linux by SNMP** template.
+
+## Disk sizing
+
+Each share buffers writes to local disk before uploading to R2 (rclone VFS cache mode `writes`). This means the entire file being written must fit on the container disk.
+
+| Workload | Recommended disk |
+|---|---|
+| Testing / small files | 8 GB (default) |
+| Backups up to ~50 GB per file | 80–100 GB |
+| Backups up to ~200 GB per file | 300+ GB |
+
+Expand the container disk in Proxmox, then update the VFS cache size in Settings accordingly. A safe rule of thumb: keep the VFS cache at 70–80% of the disk to leave room for the OS and rclone metadata.
 
 ## Updating the web UI
 
@@ -85,6 +99,7 @@ The token must have **Object Read & Write** permission scoped to the specific bu
 ## Notes
 
 - The container is created as **privileged** — required for FUSE mounts
-- `force user = root` in the Samba config is necessary because the s3fs mount is owned by root
-- Each share uses a separate credential file `/etc/r2-credentials-{name}` and mount point `/mnt/r2-{name}`
+- `force user = root` in the Samba config is necessary because the rclone mount is owned by root
+- Each share gets its own rclone config (`/etc/rclone-{name}.conf`), systemd service (`smb2s3-mount-{name}.service`), mount point (`/mnt/r2-{name}`), and VFS cache directory (`/var/cache/rclone/{name}`)
+- A watchdog timer runs every 60 seconds and automatically restarts any share that has dropped its mount
 - The container auto-logs in as root on the Proxmox **Console** tab (the Shell button always gives root directly and does not need autologin)
