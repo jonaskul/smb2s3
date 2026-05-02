@@ -62,7 +62,7 @@ def _service_name(name: str) -> str:
 
 
 def _write_mount_service(name: str):
-    cache_gb = int(_load_conf().get("vfs_cache_gb", "4"))
+    cache_gb = int(_load_conf().get("vfs_cache_gb", "70"))
     conf  = f"{RCLONE_CONF_PFX}{name}.conf"
     mount = f"{MOUNT_PREFIX}{name}"
     cache = f"{CACHE_PREFIX}{name}"
@@ -79,6 +79,7 @@ def _write_mount_service(name: str):
         f" --vfs-cache-mode writes"
         f" --cache-dir {cache}"
         f" --vfs-cache-max-size {cache_gb}G"
+        f" --vfs-write-back 1s"
         f" --buffer-size 256M"
         f" --transfers 4"
         f" --dir-cache-time 5m"

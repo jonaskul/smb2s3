@@ -50,7 +50,7 @@ auto_detect() {
     info "Network bridge: $BRIDGE"
 
     CT_HOSTNAME="r2-smb"
-    DISK_GB=8
+    DISK_GB=120
     MEMORY_MB=512
     CORES=1
     CT_DNS="1.1.1.1"

@@ -73,8 +73,8 @@ Each share buffers writes to local disk before uploading to R2 (rclone VFS cache
 
 | Workload | Recommended disk |
 |---|---|
-| Testing / small files | 8 GB (default) |
-| Backups up to ~50 GB per file | 80–100 GB |
+| Testing / small files | 20 GB |
+| Backups up to ~65 GB per file (default) | 120 GB |
 | Backups up to ~200 GB per file | 300+ GB |
 
 Expand the container disk in Proxmox, then update the VFS cache size in Settings accordingly. A safe rule of thumb: keep the VFS cache at 70–80% of the disk to leave room for the OS and rclone metadata.
