@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # setup-lxc-r2-smb.sh
-# Creates a Debian 13 LXC on Proxmox with s3fs + Samba + web management UI.
+# Creates a Debian 13 LXC on Proxmox with rclone + Samba + web management UI.
 # R2 buckets and SMB shares are configured through the web UI after setup.
 # Run on the Proxmox host as root.
 SCRIPT_VERSION="2026-05-01 14:00 CEST"
@@ -175,7 +175,7 @@ create_container() {
         --net0       "$net0" \
         --nameserver "$CT_DNS" \
         --unprivileged 0 \
-        --features   "fuse=1" \
+        --features   "fuse=1,nesting=1" \
         --onboot     1 \
         --start      0
 
@@ -220,8 +220,8 @@ wait_for_dns() {
 }
 
 install_packages() {
-    step "Installing packages (s3fs, samba, python3-flask)..."
-    exec_ct "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq s3fs samba samba-common-bin curl fuse python3-flask"
+    step "Installing packages (rclone, samba, python3-flask)..."
+    exec_ct "LANG=C LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get update -qq && LANG=C LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get install -y -qq rclone fuse3 samba samba-common-bin curl python3-flask"
 }
 
 configure_samba() {
@@ -248,13 +248,13 @@ EOF
 
 setup_autologin() {
     step "Configuring root auto-login on console..."
-    exec_ct "mkdir -p /etc/systemd/system/console-getty.service.d"
-    pct exec "$VMID" -- bash -c "cat > /etc/systemd/system/console-getty.service.d/autologin.conf" <<'EOF'
+    exec_ct "mkdir -p /etc/systemd/system/container-getty@1.service.d"
+    pct exec "$VMID" -- bash -c 'cat > /etc/systemd/system/container-getty@1.service.d/override.conf << '"'"'EOF'"'"'
 [Service]
 ExecStart=
-ExecStart=-/sbin/agetty --autologin root --noclear console linux
-EOF
-    exec_ct "systemctl daemon-reload && systemctl restart console-getty || true"
+ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 $TERM
+EOF'
+    exec_ct "systemctl daemon-reload"
 }
 
 setup_web_ui() {

@@ -344,6 +344,7 @@
   const settingsCancel  = document.getElementById("settings-cancel");
   const settingsSave    = document.getElementById("settings-save");
   const settingsError   = document.getElementById("settings-error");
+  const sVfsCacheGb     = document.getElementById("s-vfs-cache-gb");
   const sSnmpEnabled    = document.getElementById("s-snmp-enabled");
   const sSnmpCommunity  = document.getElementById("s-snmp-community");
   const sSnmpAllowed    = document.getElementById("s-snmp-allowed");
@@ -365,6 +366,7 @@
     settingsOverlay.hidden = false;
     try {
       const cfg = await api("GET", "/api/settings");
+      sVfsCacheGb.value          = cfg.vfs_cache_gb;
       sSnmpEnabled.checked       = cfg.snmp_enabled;
       sSnmpCommunity.value       = cfg.snmp_community;
       sSnmpAllowed.value         = cfg.snmp_allowed;
@@ -389,6 +391,7 @@
     settingsSave.textContent = "Saving…";
     try {
       await api("POST", "/api/settings", {
+        vfs_cache_gb:   parseInt(sVfsCacheGb.value, 10) || 50,
         snmp_enabled:   sSnmpEnabled.checked,
         snmp_community: sSnmpCommunity.value.trim(),
         snmp_allowed:   sSnmpAllowed.value.trim(),
