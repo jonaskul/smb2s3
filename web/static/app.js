@@ -243,57 +243,104 @@
     }
   }
 
-  // ─── Clean cache ────────────────────────────────────────────────────────────
+  // ─── Clean cache modal ──────────────────────────────────────────────────────
   function fmtMb(bytes) {
     if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)} KB`;
     if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(0)} MB`;
     return `${(bytes / 1073741824).toFixed(2)} GB`;
   }
 
-  async function confirmCleanCache(name) {
+  const ccOverlay    = document.getElementById("clean-cache-overlay");
+  const ccName       = document.getElementById("cc-name");
+  const ccLoading    = document.getElementById("cc-loading");
+  const ccResult     = document.getElementById("cc-result");
+  const ccStaleRow   = document.getElementById("cc-stale-row");
+  const ccStaleLabel = document.getElementById("cc-stale-label");
+  const ccDirtyRow   = document.getElementById("cc-dirty-row");
+  const ccDirtyLabel = document.getElementById("cc-dirty-label");
+  const ccDesc       = document.getElementById("cc-desc");
+  const ccError      = document.getElementById("cc-error");
+  const ccCancel     = document.getElementById("cc-cancel");
+  const ccCleanStale = document.getElementById("cc-clean-stale");
+  const ccCleanAll   = document.getElementById("cc-clean-all");
+
+  ccCancel.addEventListener("click", () => { ccOverlay.hidden = true; });
+  ccOverlay.addEventListener("click", (e) => { if (e.target === ccOverlay) ccOverlay.hidden = true; });
+
+  async function confirmCleanCache(shareName) {
+    ccName.textContent    = shareName;
+    ccLoading.hidden      = false;
+    ccResult.hidden       = true;
+    ccError.hidden        = true;
+    ccCleanStale.hidden   = true;
+    ccCleanAll.hidden     = true;
+    ccOverlay.hidden      = false;
+
     let status;
     try {
-      status = await api("GET", `/api/shares/${encodeURIComponent(name)}/cache-status`);
+      status = await api("GET", `/api/shares/${encodeURIComponent(shareName)}/cache-status`);
     } catch (err) {
-      alert(`Could not read cache status: ${err.message}`);
+      ccLoading.hidden = true;
+      ccError.textContent = err.message;
+      ccError.hidden = false;
       return;
     }
+
+    ccLoading.hidden = true;
+    ccResult.hidden  = false;
 
     const { stale_bytes, dirty_bytes, stale_count, dirty_count } = status;
 
     if (stale_bytes === 0 && dirty_bytes === 0) {
-      alert(`Cache for "${name}" is already empty.`);
+      ccDesc.textContent = "Cache is already empty — nothing to clean.";
       return;
     }
 
-    let msg = `Cache for "${name}":\n`;
-    if (stale_bytes > 0)
-      msg += `  ✓ ${fmtMb(stale_bytes)} already uploaded to R2 (${stale_count} file${stale_count !== 1 ? "s" : ""})\n`;
-    if (dirty_bytes > 0)
-      msg += `  ⚠ ${fmtMb(dirty_bytes)} pending upload (${dirty_count} file${dirty_count !== 1 ? "s" : ""})\n`;
-    msg += "\n";
+    ccStaleRow.hidden = stale_bytes === 0;
+    if (stale_bytes > 0) {
+      ccStaleLabel.textContent =
+        `${fmtMb(stale_bytes)} — ${stale_count} file${stale_count !== 1 ? "s" : ""} already on R2`;
+    }
 
-    let stale_only;
+    ccDirtyRow.hidden = dirty_bytes === 0;
+    if (dirty_bytes > 0) {
+      ccDirtyLabel.textContent =
+        `${fmtMb(dirty_bytes)} — ${dirty_count} file${dirty_count !== 1 ? "s" : ""} not yet uploaded`;
+    }
+
     if (stale_bytes > 0 && dirty_bytes > 0) {
-      msg += `Clean uploaded files only (${fmtMb(stale_bytes)})?\n\nOK = clean uploaded only   Cancel = abort`;
-      if (!confirm(msg)) return;
-      stale_only = true;
+      ccDesc.textContent =
+        "Remove uploaded files only, or remove everything including pending uploads " +
+        "(backup client will need to re-send those files).";
+      ccCleanStale.textContent = `Remove uploaded (${fmtMb(stale_bytes)})`;
+      ccCleanStale.hidden = false;
+      ccCleanAll.textContent  = "Remove all";
+      ccCleanAll.hidden = false;
     } else if (stale_bytes > 0) {
-      msg += `All cached data is already on R2. Safe to clean all ${fmtMb(stale_bytes)}.`;
-      if (!confirm(msg)) return;
-      stale_only = true;
+      ccDesc.textContent = "All cached data is already on R2 and safe to remove.";
+      ccCleanStale.textContent = `Remove ${fmtMb(stale_bytes)}`;
+      ccCleanStale.hidden = false;
     } else {
-      msg += `All cached data is pending upload. Cleaning will require re-sending from the backup client.`;
-      if (!confirm(msg)) return;
-      stale_only = false;
+      ccDesc.textContent =
+        "All cached data is still pending upload. Removing it will require the backup client to re-send.";
+      ccCleanAll.textContent = `Remove ${fmtMb(dirty_bytes)}`;
+      ccCleanAll.hidden = false;
     }
 
-    try {
-      await api("POST", `/api/shares/${encodeURIComponent(name)}/clean-cache`, { stale_only });
-      loadShares();
-    } catch (err) {
-      alert(`Failed to clean cache: ${err.message}`);
+    async function doClean(stale_only) {
+      ccOverlay.hidden = true;
+      try {
+        await api("POST", `/api/shares/${encodeURIComponent(shareName)}/clean-cache`, { stale_only });
+        loadShares();
+      } catch (err) {
+        ccError.textContent = err.message;
+        ccError.hidden = false;
+        ccOverlay.hidden = false;
+      }
     }
+
+    ccCleanStale.onclick = () => doClean(true);
+    ccCleanAll.onclick   = () => doClean(false);
   }
 
   // ─── Stats ──────────────────────────────────────────────────────────────────

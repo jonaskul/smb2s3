@@ -212,6 +212,37 @@
     </div>
   </div>
 
+  <!-- Clean cache modal -->
+  <div id="clean-cache-overlay" hidden>
+    <div class="modal-card">
+      <h2>Clean cache — <span id="cc-name"></span></h2>
+
+      <div id="cc-loading" class="cc-loading">Checking cache…</div>
+
+      <div id="cc-result" hidden>
+        <div id="cc-stale-row" class="cc-row" hidden>
+          <span class="cc-dot cc-dot--ok"></span>
+          <span id="cc-stale-label"></span>
+          <span class="cc-tag cc-tag--ok">safe to remove</span>
+        </div>
+        <div id="cc-dirty-row" class="cc-row" hidden>
+          <span class="cc-dot cc-dot--warn"></span>
+          <span id="cc-dirty-label"></span>
+          <span class="cc-tag cc-tag--warn">pending upload</span>
+        </div>
+        <p id="cc-desc" class="cc-desc"></p>
+      </div>
+
+      <p id="cc-error" class="error-msg" hidden></p>
+
+      <div class="modal-actions">
+        <button type="button" id="cc-cancel" class="btn-ghost">Cancel</button>
+        <button type="button" id="cc-clean-stale" class="btn-secondary" hidden>Remove uploaded</button>
+        <button type="button" id="cc-clean-all" class="btn-danger" hidden>Remove all</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>
