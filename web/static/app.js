@@ -90,6 +90,25 @@
     dashView.hidden = false;
     loadShares();
     startStats();
+    checkVersion();
+  }
+
+  // ─── Version check ──────────────────────────────────────────────────────────
+  const versionBadge = document.getElementById("version-badge");
+
+  async function checkVersion() {
+    versionBadge.hidden = true;
+    try {
+      const v = await api("GET", "/api/version");
+      if (v.update_available) {
+        versionBadge.textContent = `↑ Update available (${v.latest}) — run smb2s3-update`;
+        versionBadge.className = "version-badge version-badge--update";
+      } else if (v.installed && v.installed !== "unknown") {
+        versionBadge.textContent = `v${v.installed}`;
+        versionBadge.className = "version-badge version-badge--ok";
+      }
+      versionBadge.hidden = false;
+    } catch (_) { /* no version info — stay hidden */ }
   }
 
   // ─── Shares list ────────────────────────────────────────────────────────────

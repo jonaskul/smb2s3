@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+RAW=https://raw.githubusercontent.com/jonaskul/smb2s3/main
+curl -fsSL ${RAW}/web/app.py            -o /opt/smb2s3/app.py
+curl -fsSL ${RAW}/web/static/index.html -o /opt/smb2s3/static/index.html
+curl -fsSL ${RAW}/web/static/app.js     -o /opt/smb2s3/static/app.js
+curl -fsSL ${RAW}/web/static/style.css  -o /opt/smb2s3/static/style.css
+curl -fsSL ${RAW}/web/version           -o /etc/smb2s3/version
+curl -fsSL ${RAW}/scripts/smb2s3-update -o /usr/local/bin/smb2s3-update
+chmod +x /usr/local/bin/smb2s3-update
+systemctl restart smb2s3-web
+echo "smb2s3 updated to $(cat /etc/smb2s3/version)."

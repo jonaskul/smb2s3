@@ -6,6 +6,7 @@ import secrets
 import shutil
 import subprocess
 import time
+import urllib.request
 from functools import wraps
 
 from flask import Flask, jsonify, request, send_from_directory, session
@@ -17,6 +18,8 @@ SMB_CONF         = "/etc/samba/smb.conf"
 RCLONE_BIN       = "/usr/bin/rclone"
 RCLONE_CONF_PFX  = "/etc/rclone-"   # {name}.conf
 MOUNT_PREFIX     = "/mnt/r2-"
+VERSION_FILE     = "/etc/smb2s3/version"
+VERSION_URL      = "https://raw.githubusercontent.com/jonaskul/smb2s3/main/web/version"
 CACHE_PREFIX     = "/var/cache/rclone/"
 
 NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$")
@@ -473,6 +476,32 @@ def get_stats():
         "load_1":       load,
         "shares":       shares,
         "watchdog_log": watchdog_log,
+    })
+
+
+# ─── API: version ─────────────────────────────────────────────────────────────
+
+@app.route("/api/version")
+@require_login
+def get_version():
+    installed = "unknown"
+    try:
+        with open(VERSION_FILE) as f:
+            installed = f.read().strip()
+    except FileNotFoundError:
+        pass
+
+    latest = None
+    try:
+        with urllib.request.urlopen(VERSION_URL, timeout=4) as r:
+            latest = r.read().decode().strip()
+    except Exception:
+        pass
+
+    return jsonify({
+        "installed":        installed,
+        "latest":           latest,
+        "update_available": latest is not None and latest != installed,
     })
 
 
