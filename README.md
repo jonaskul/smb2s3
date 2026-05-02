@@ -33,6 +33,8 @@ The wizard will prompt for:
 
 | Prompt | Example |
 |---|---|
+| Container storage | `local-lvm` (auto-detected) |
+| Disk size (GB) | `120` (default) |
 | Network mode | `dhcp` (default) or `static` |
 | IP + gateway | Static mode only |
 | Web UI admin username | `admin` (default) |
@@ -50,6 +52,7 @@ After setup, a browser-based UI is available at `http://<CT-IP>:8080`. Log in wi
 - Add new R2 shares — each with its own bucket, credentials, and Samba user
 - Edit existing shares (update credentials, account ID, or Samba password)
 - Delete shares (stops the rclone service, removes from smb.conf, cleans up cache)
+- **Clean cache** — free local disk space after uploads complete (see below)
 
 ### Stats
 
@@ -60,11 +63,23 @@ A live stats panel is always visible on the dashboard (updates every 3 seconds):
 - **Per-share cache** — mount status and local VFS cache size for each share
 - **Watchdog log** — recent mount events (unmounts detected, remount attempts and results)
 
+### Cache cleanup
+
+Each share card has a **Clean cache** button. It reads rclone's internal metadata to tell apart files already uploaded to R2 from files still pending upload, then shows a modal with the breakdown:
+
+- **Remove uploaded** — deletes only the already-uploaded files; pending uploads are untouched
+- **Remove all** — deletes everything including pending uploads (backup client must re-send those files)
+
 ### Settings
 
 The ⚙ Settings button in the top bar provides:
 
 - **VFS cache size** — maximum local disk space per share used to buffer writes before upload to R2. Increase this if you need to write files larger than the current limit. Changing this restarts all active mounts.
+- **rclone performance** — tune CPU and memory usage during transfers. All values restart active mounts when saved:
+  - *Transfers* — concurrent upload streams (default: 2)
+  - *Checkers* — concurrent checksum operations (default: 2)
+  - *Buffer per transfer* — in-memory buffer in MB per stream (default: 64 MB)
+  - *Write-back delay* — seconds after last write before upload starts (default: 5 s)
 - **SNMP monitoring** — enable/disable `snmpd` with configurable community string and allowed host/CIDR. Compatible with the Zabbix **Linux by SNMP** template.
 
 ## Disk sizing
@@ -78,6 +93,12 @@ Each share buffers writes to local disk before uploading to R2 (rclone VFS cache
 | Backups up to ~200 GB per file | 300+ GB |
 
 Expand the container disk in Proxmox, then update the VFS cache size in Settings accordingly. A safe rule of thumb: keep the VFS cache at 70–80% of the disk to leave room for the OS and rclone metadata.
+
+If the container causes high load on the Proxmox node, cap its CPU usage from the host:
+
+```bash
+pct set <VMID> -cpulimit 2
+```
 
 ## Updating the web UI
 
