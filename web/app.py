@@ -773,18 +773,55 @@ def delete_share(name):
 SNMP_CONF = "/etc/snmp/snmpd.conf"
 
 
+DISTRO_SCRIPT = "/usr/bin/distro"
+DISTRO_URL    = "https://raw.githubusercontent.com/librenms/librenms-agent/master/snmp/distro"
+
+
 def _apply_snmp(enabled: bool, community: str, allowed: str):
     if enabled:
         _run("apt-get", "install", "-y", "-qq", "snmpd")
+
+        # LibreNMS distro detection script
+        if not os.path.exists(DISTRO_SCRIPT):
+            try:
+                with urllib.request.urlopen(DISTRO_URL, timeout=10) as r:
+                    with open(DISTRO_SCRIPT, "wb") as f:
+                        f.write(r.read())
+                os.chmod(DISTRO_SCRIPT, 0o755)
+            except Exception:
+                pass
+
         source = f" {allowed}" if allowed else ""
         conf = (
             "agentAddress udp:161\n"
             f"rocommunity {community}{source}\n"
             "sysLocation LXC r2-smb\n"
             "sysContact root@localhost\n"
+            "\n"
+            "# Disk: report all mounted filesystems, warn at 10% free\n"
+            "includeAllDisks 10%\n"
+            "\n"
+            "# Process monitoring\n"
+            "proc smbd 1\n"
+            "proc python3 1\n"
+            "\n"
+            "# LibreNMS extensions\n"
+            "extend distro /usr/bin/distro\n"
+            "extend hardware /bin/cat /proc/cpuinfo\n"
+            "extend osupdate /etc/snmp/osupdate\n"
         )
         with open(SNMP_CONF, "w") as f:
             f.write(conf)
+
+        # OS update check script for LibreNMS
+        osupdate = (
+            "#!/bin/bash\n"
+            "apt-get -s upgrade 2>/dev/null | grep -c '^Inst ' || true\n"
+        )
+        with open("/etc/snmp/osupdate", "w") as f:
+            f.write(osupdate)
+        os.chmod("/etc/snmp/osupdate", 0o755)
+
         _run("systemctl", "enable", "snmpd")
         _run("systemctl", "restart", "snmpd")
     else:
