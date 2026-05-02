@@ -58,11 +58,11 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 # ─── rclone mount services ────────────────────────────────────────────────────
 
 def _service_name(name: str) -> str:
-    return f"smb2s3-{name}.service"
+    return f"smb2s3-mount-{name}.service"
 
 
 def _write_mount_service(name: str):
-    cache_gb = int(_load_conf().get("vfs_cache_gb", "50"))
+    cache_gb = int(_load_conf().get("vfs_cache_gb", "4"))
     conf  = f"{RCLONE_CONF_PFX}{name}.conf"
     mount = f"{MOUNT_PREFIX}{name}"
     cache = f"{CACHE_PREFIX}{name}"
@@ -116,9 +116,6 @@ def _ensure_rclone_services():
         svc = _service_name(name)
         subprocess.run(["systemctl", "enable", "--now", svc], check=False)
 
-_ensure_rclone_services()
-
-
 # ─── Watchdog ─────────────────────────────────────────────────────────────────
 
 WATCHDOG_SCRIPT  = "/usr/local/bin/smb2s3-watchdog"
@@ -130,10 +127,10 @@ def _ensure_watchdog():
     script = """\
 #!/usr/bin/env bash
 set -euo pipefail
-for svc_path in /etc/systemd/system/smb2s3-*.service; do
+for svc_path in /etc/systemd/system/smb2s3-mount-*.service; do
     [[ -f "$svc_path" ]] || continue
     svc="${svc_path##*/}"
-    name="${svc#smb2s3-}"; name="${name%.service}"
+    name="${svc#smb2s3-mount-}"; name="${name%.service}"
     mp="/mnt/r2-${name}"
     grep -q " ${mp} " /proc/mounts && continue
     logger -t smb2s3-watchdog "unmounted: ${mp} — restarting service"
@@ -187,9 +184,6 @@ WantedBy=timers.target
             subprocess.run(["systemctl", "enable", "--now", "smb2s3-watchdog.timer"], check=False)
     except Exception:
         pass
-
-_ensure_watchdog()
-
 
 # ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -652,7 +646,7 @@ def get_settings():
         "snmp_enabled":   cfg.get("snmp_enabled", "false") == "true",
         "snmp_community": cfg.get("snmp_community", "public"),
         "snmp_allowed":   cfg.get("snmp_allowed", ""),
-        "vfs_cache_gb":   int(cfg.get("vfs_cache_gb", "50")),
+        "vfs_cache_gb":   int(cfg.get("vfs_cache_gb", "4")),
     })
 
 
@@ -686,6 +680,9 @@ def save_settings():
 
     return jsonify({"ok": True})
 
+
+_ensure_rclone_services()
+_ensure_watchdog()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)

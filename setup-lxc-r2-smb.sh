@@ -3,7 +3,7 @@
 # Creates a Debian 13 LXC on Proxmox with rclone + Samba + web management UI.
 # R2 buckets and SMB shares are configured through the web UI after setup.
 # Run on the Proxmox host as root.
-SCRIPT_VERSION="2026-05-01 14:00 CEST"
+SCRIPT_VERSION="2026-05-02 12:00 CEST"
 set -euo pipefail
 
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
