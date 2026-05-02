@@ -77,7 +77,7 @@ def _write_mount_service(name: str):
         f"ExecStart={RCLONE_BIN} mount {name}:{name} {mount}"
         f" --config {conf}"
         f" --vfs-cache-mode writes"
-        f" --vfs-cache-dir {cache}"
+        f" --cache-dir {cache}"
         f" --vfs-cache-max-size {cache_gb}G"
         f" --buffer-size 256M"
         f" --transfers 4"
