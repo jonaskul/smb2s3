@@ -68,6 +68,22 @@ run_wizard() {
     echo -e "${BOLD}╚══════════════════════════════════════════════════════════╝${NC}"
     echo
 
+    # ── Storage ──
+    echo -e "${CYAN}── Storage ─────────────────────────────────────────────────${NC}"
+    echo -e "  Available storage pools:"
+    pvesm status --content rootdir 2>/dev/null \
+        | awk 'NR>1 && $3=="active" {printf "    %-20s %s\n", $1, $4}' || true
+    echo
+    ask "Container storage [${ROOTFS_STORAGE}]:"
+    read -r _input
+    ROOTFS_STORAGE="${_input:-$ROOTFS_STORAGE}"
+    ask "Disk size in GB [${DISK_GB}]:"
+    read -r _input
+    DISK_GB="${_input:-$DISK_GB}"
+    DISK_GB="${DISK_GB//[^0-9]/}"
+    [[ -z "$DISK_GB" || "$DISK_GB" -lt 8 ]] && DISK_GB=120
+    echo
+
     # ── Network ──
     echo -e "${CYAN}── Network ─────────────────────────────────────────────────${NC}"
     ask "Network mode — DHCP or static? [dhcp/static, default: dhcp]:"
