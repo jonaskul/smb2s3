@@ -655,6 +655,28 @@ def cache_status(name):
     return jsonify(_scan_cache(name))
 
 
+@app.route("/api/shares/<name>/cache-debug")
+@require_login
+def cache_debug(name):
+    err = _validate_name(name)
+    if err:
+        return err
+    cache_dir = os.path.join(CACHE_PREFIX, name)
+    entries = []
+    for root, dirs, files in os.walk(cache_dir):
+        for fname in files:
+            full = os.path.join(root, fname)
+            rel  = os.path.relpath(full, cache_dir)
+            try:
+                size = os.path.getsize(full)
+            except OSError:
+                size = -1
+            entries.append({"path": rel, "size": size})
+        entries += [{"path": os.path.relpath(os.path.join(root, d), cache_dir) + "/", "size": 0}
+                    for d in dirs]
+    return jsonify({"cache_dir": cache_dir, "entries": entries[:100]})
+
+
 @app.route("/api/shares/<name>/clean-cache", methods=["POST"])
 @require_login
 def clean_cache(name):
