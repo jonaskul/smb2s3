@@ -5,7 +5,7 @@ Creates a Debian 13 LXC on Proxmox that mounts Cloudflare R2 buckets via rclone 
 ## What the script does
 
 1. Auto-detects the Proxmox environment (VMID, storage, bridge)
-2. Runs a minimal wizard — network mode and web UI credentials only
+2. Runs a minimal wizard — storage, disk size, network mode and web UI credentials
 3. Downloads the Debian 13 template if not already present locally
 4. Creates and starts a privileged LXC with FUSE support
 5. Installs rclone, Samba, and Python/Flask inside the container
@@ -65,22 +65,42 @@ A live stats panel is always visible on the dashboard (updates every 3 seconds):
 
 ### Cache cleanup
 
-Each share card has a **Clean cache** button. It reads rclone's internal metadata to tell apart files already uploaded to R2 from files still pending upload, then shows a modal with the breakdown:
+Each share card has a **Clean cache** button. It reads rclone's internal metadata (`vfsMeta/`) to distinguish files already uploaded to R2 from files still pending upload, then shows a modal with the breakdown before taking any action.
 
-- **Remove uploaded** — deletes only the already-uploaded files; pending uploads are untouched
+- **Remove uploaded** — deletes only already-uploaded files; pending uploads are untouched
 - **Remove all** — deletes everything including pending uploads (backup client must re-send those files)
+
+Rclone also evicts uploaded files automatically after ~1 hour (`--vfs-cache-max-age` default). The button is useful when you need the space back immediately.
 
 ### Settings
 
 The ⚙ Settings button in the top bar provides:
 
-- **VFS cache size** — maximum local disk space per share used to buffer writes before upload to R2. Increase this if you need to write files larger than the current limit. Changing this restarts all active mounts.
+- **VFS cache size** — maximum local disk space per share used to buffer writes before upload to R2. Changing this restarts all active mounts.
 - **rclone performance** — tune CPU and memory usage during transfers. All values restart active mounts when saved:
   - *Transfers* — concurrent upload streams (default: 2)
   - *Checkers* — concurrent checksum operations (default: 2)
   - *Buffer per transfer* — in-memory buffer in MB per stream (default: 64 MB)
   - *Write-back delay* — seconds after last write before upload starts (default: 5 s)
-- **SNMP monitoring** — enable/disable `snmpd` with configurable community string and allowed host/CIDR. Compatible with the Zabbix **Linux by SNMP** template.
+- **SNMP monitoring** — enable/disable `snmpd` on UDP port 161 (SNMPv2c). Includes extensions for LibreNMS and Zabbix:
+
+| Extension | Data |
+|---|---|
+| `distro` | OS name and version |
+| `includeAllDisks` | Disk usage for all mount points |
+| `proc smbd` | Samba process count (alerts if 0) |
+| `proc python3` | Web UI process count (alerts if 0) |
+| `osupdate` | Number of pending apt upgrades |
+
+### Version and updates
+
+The topbar shows the installed version. If a newer version is available on GitHub, an **↑ Update** button appears. Clicking it runs `smb2s3-update` in the background, shows a spinner, and reloads the page automatically when the service is back up.
+
+To update from the terminal instead:
+
+```bash
+smb2s3-update
+```
 
 ## Disk sizing
 
@@ -100,13 +120,7 @@ If the container causes high load on the Proxmox node, cap its CPU usage from th
 pct set <VMID> -cpulimit 2
 ```
 
-## Updating the web UI
-
-Run this inside the container as root to pull the latest version from GitHub:
-
-```bash
-smb2s3-update
-```
+Reduce *Transfers* and *Buffer per transfer* in Settings to lower CPU and memory usage further.
 
 ## Cloudflare R2 API token requirements
 
