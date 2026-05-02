@@ -254,7 +254,7 @@ setup_autologin() {
 ExecStart=
 ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 $TERM
 EOF'
-    exec_ct "systemctl daemon-reload"
+    exec_ct "systemctl daemon-reload && systemctl restart container-getty@1"
 }
 
 setup_web_ui() {
