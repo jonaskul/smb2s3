@@ -93,23 +93,48 @@
     checkVersion();
   }
 
-  // ─── Version check ──────────────────────────────────────────────────────────
-  const versionBadge = document.getElementById("version-badge");
+  // ─── Version check + update ─────────────────────────────────────────────────
+  const versionBadge  = document.getElementById("version-badge");
+  const updateBtn     = document.getElementById("update-btn");
+  const updateOverlay = document.getElementById("update-overlay");
+  const updateMsg     = document.getElementById("update-msg");
 
   async function checkVersion() {
     versionBadge.hidden = true;
+    updateBtn.hidden    = true;
     try {
       const v = await api("GET", "/api/version");
       if (v.update_available) {
-        versionBadge.textContent = `↑ Update available (${v.latest}) — run smb2s3-update`;
-        versionBadge.className = "version-badge version-badge--update";
+        versionBadge.textContent = `v${v.installed || "?"}  →  v${v.latest}`;
+        versionBadge.className   = "version-badge version-badge--update";
+        updateBtn.hidden         = false;
       } else if (v.installed && v.installed !== "unknown") {
         versionBadge.textContent = `v${v.installed}`;
-        versionBadge.className = "version-badge version-badge--ok";
+        versionBadge.className   = "version-badge version-badge--ok";
       }
       versionBadge.hidden = false;
     } catch (_) { /* no version info — stay hidden */ }
   }
+
+  updateBtn.addEventListener("click", async () => {
+    updateOverlay.hidden = false;
+    updateMsg.textContent = "Starting update…";
+    try {
+      await api("POST", "/api/update");
+    } catch (_) { /* service restarts — connection drops, that's expected */ }
+
+    updateMsg.textContent = "Restarting service — reconnecting…";
+
+    // Poll until the service is back up, then reload
+    const poll = async () => {
+      try {
+        const res = await fetch("/", { cache: "no-store" });
+        if (res.ok) { location.reload(); return; }
+      } catch (_) {}
+      setTimeout(poll, 1500);
+    };
+    setTimeout(poll, 4000);
+  });
 
   // ─── Shares list ────────────────────────────────────────────────────────────
   async function loadShares() {

@@ -28,11 +28,20 @@
       <span class="topbar-title">smb2s3</span>
       <span id="version-badge" class="version-badge" hidden></span>
       <div class="topbar-actions">
+        <button id="update-btn" class="btn-update" hidden>↑ Update</button>
         <button id="add-btn" class="btn-primary">+ Add Share</button>
         <button id="settings-btn" class="btn-ghost">⚙ Settings</button>
         <button id="logout-btn" class="btn-ghost">Sign out</button>
       </div>
     </header>
+
+  <!-- Update overlay -->
+  <div id="update-overlay" hidden>
+    <div class="update-card">
+      <div class="update-spinner"></div>
+      <p id="update-msg">Updating — please wait…</p>
+    </div>
+  </div>
     <main>
       <div id="stats-section">
         <div class="stats-row">

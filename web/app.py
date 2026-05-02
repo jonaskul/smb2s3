@@ -505,6 +505,20 @@ def get_version():
     })
 
 
+@app.route("/api/update", methods=["POST"])
+@require_login
+def run_update():
+    try:
+        pid = os.fork()
+        if pid == 0:
+            os.setsid()
+            subprocess.run(["/usr/local/bin/smb2s3-update"], check=False)
+            os._exit(0)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ─── API: shares ──────────────────────────────────────────────────────────────
 
 @app.route("/api/shares")
