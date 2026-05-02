@@ -11,18 +11,12 @@ from flask import Flask, jsonify, request, send_from_directory, session
 
 app = Flask(__name__, static_folder="static")
 
-ADMIN_CONF = "/etc/smb2s3/admin.conf"
-SMB_CONF = "/etc/samba/smb.conf"
-FSTAB = "/etc/fstab"
-CRED_PREFIX = "/etc/r2-credentials-"
-MOUNT_PREFIX = "/mnt/r2-"
-CACHE_PREFIX = "/var/cache/s3fs/"
-
-S3FS_OPTS = (
-    "passwd_file={cred},url={url},use_path_request_style,"
-    "allow_other,umask=0022,uid=0,gid=0,"
-    "use_cache={cache},parallel_count=8,multipart_size=64,ensure_diskfree=2048"
-)
+ADMIN_CONF       = "/etc/smb2s3/admin.conf"
+SMB_CONF         = "/etc/samba/smb.conf"
+RCLONE_BIN       = "/usr/bin/rclone"
+RCLONE_CONF_PFX  = "/etc/rclone-"   # {name}.conf
+MOUNT_PREFIX     = "/mnt/r2-"
+CACHE_PREFIX     = "/var/cache/rclone/"
 
 NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$")
 
@@ -61,54 +55,99 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 
 
-def _ensure_mount_service():
-    path = "/etc/systemd/system/smb2s3-mount.service"
-    content = """\
-[Unit]
-Description=Mount smb2s3 R2 shares
-After=network-online.target
-Wants=network-online.target
+# ─── rclone mount services ────────────────────────────────────────────────────
 
-[Service]
-Type=oneshot
-ExecStart=/bin/mount -a -t fuse.s3fs
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-"""
-    try:
-        existing = open(path).read() if os.path.exists(path) else ""
-        if existing != content:
-            with open(path, "w") as f:
-                f.write(content)
-            subprocess.run(["systemctl", "daemon-reload"], check=False)
-            subprocess.run(["systemctl", "enable", "--now", "smb2s3-mount.service"], check=False)
-    except Exception:
-        pass
-
-_ensure_mount_service()
+def _service_name(name: str) -> str:
+    return f"smb2s3-{name}.service"
 
 
-WATCHDOG_SCRIPT = "/usr/local/bin/smb2s3-watchdog"
+def _write_mount_service(name: str):
+    cache_gb = int(_load_conf().get("vfs_cache_gb", "50"))
+    conf  = f"{RCLONE_CONF_PFX}{name}.conf"
+    mount = f"{MOUNT_PREFIX}{name}"
+    cache = f"{CACHE_PREFIX}{name}"
+    content = (
+        f"[Unit]\n"
+        f"Description=rclone R2 mount — {name}\n"
+        f"After=network-online.target\n"
+        f"Wants=network-online.target\n"
+        f"\n"
+        f"[Service]\n"
+        f"Type=simple\n"
+        f"ExecStart={RCLONE_BIN} mount {name}:{name} {mount}"
+        f" --config {conf}"
+        f" --vfs-cache-mode writes"
+        f" --vfs-cache-dir {cache}"
+        f" --vfs-cache-max-size {cache_gb}G"
+        f" --buffer-size 256M"
+        f" --transfers 4"
+        f" --dir-cache-time 5m"
+        f" --poll-interval 30s"
+        f" --allow-other"
+        f" --umask 022"
+        f" --log-level INFO\n"
+        f"ExecStop=fusermount3 -uz {mount}\n"
+        f"Restart=on-failure\n"
+        f"RestartSec=30\n"
+        f"\n"
+        f"[Install]\n"
+        f"WantedBy=multi-user.target\n"
+    )
+    path = f"/etc/systemd/system/{_service_name(name)}"
+    with open(path, "w") as f:
+        f.write(content)
+    os.chmod(path, 0o644)
+
+
+def _ensure_rclone_services():
+    sections = _parse_smb_conf()
+    changed = False
+    for name in sections:
+        svc_path = f"/etc/systemd/system/{_service_name(name)}"
+        if not os.path.exists(svc_path):
+            try:
+                _write_mount_service(name)
+                changed = True
+            except Exception:
+                pass
+    if changed:
+        subprocess.run(["systemctl", "daemon-reload"], check=False)
+    for name in sections:
+        svc = _service_name(name)
+        subprocess.run(["systemctl", "enable", "--now", svc], check=False)
+
+_ensure_rclone_services()
+
+
+# ─── Watchdog ─────────────────────────────────────────────────────────────────
+
+WATCHDOG_SCRIPT  = "/usr/local/bin/smb2s3-watchdog"
 WATCHDOG_SERVICE = "/etc/systemd/system/smb2s3-watchdog.service"
 WATCHDOG_TIMER   = "/etc/systemd/system/smb2s3-watchdog.timer"
+
 
 def _ensure_watchdog():
     script = """\
 #!/usr/bin/env bash
 set -euo pipefail
-while IFS= read -r line; do
-    [[ "$line" =~ ^s3fs# ]] || continue
-    mp=$(awk '{print $2}' <<< "$line")
-    grep -q " $mp " /proc/mounts && continue
-    logger -t smb2s3-watchdog "unmounted: $mp — remounting"
-    if mount "$mp" 2>/dev/null; then
-        logger -t smb2s3-watchdog "remounted: $mp"
+for svc_path in /etc/systemd/system/smb2s3-*.service; do
+    [[ -f "$svc_path" ]] || continue
+    svc="${svc_path##*/}"
+    name="${svc#smb2s3-}"; name="${name%.service}"
+    mp="/mnt/r2-${name}"
+    grep -q " ${mp} " /proc/mounts && continue
+    logger -t smb2s3-watchdog "unmounted: ${mp} — restarting service"
+    if systemctl restart "${svc}" 2>/dev/null; then
+        sleep 10
+        if grep -q " ${mp} " /proc/mounts; then
+            logger -t smb2s3-watchdog "remounted: ${mp}"
+        else
+            logger -t smb2s3-watchdog "remount failed: ${mp}"
+        fi
     else
-        logger -t smb2s3-watchdog "remount failed: $mp"
+        logger -t smb2s3-watchdog "remount failed: ${mp}"
     fi
-done < /etc/fstab
+done
 """
     service = """\
 [Unit]
@@ -207,16 +246,13 @@ def _validate_name(name: str):
 
 
 def _run(*cmd, input=None, check=True):
-    result = subprocess.run(
-        cmd, capture_output=True, text=True, input=input
-    )
+    result = subprocess.run(cmd, capture_output=True, text=True, input=input)
     if check and result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or result.stdout.strip())
     return result
 
 
 def _parse_smb_conf():
-    """Return {section_name: {key: value}} for all non-global sections."""
     sections = {}
     current = None
     try:
@@ -239,20 +275,9 @@ def _is_mounted(name: str) -> bool:
     mount_path = f"{MOUNT_PREFIX}{name}"
     try:
         with open("/proc/mounts") as f:
-            return any(
-                "s3fs" in line and mount_path in line
-                for line in f
-            )
+            return any(mount_path in line for line in f)
     except FileNotFoundError:
         return False
-
-
-def _fstab_line(name: str, url: str) -> str:
-    cred = f"{CRED_PREFIX}{name}"
-    cache = f"{CACHE_PREFIX}{name}"
-    mount = f"{MOUNT_PREFIX}{name}"
-    opts = S3FS_OPTS.format(cred=cred, url=url, cache=cache)
-    return f"s3fs#{name} {mount} fuse _netdev,nofail,{opts} 0 0\n"
 
 
 def _r2_url(account_id: str, eu: bool) -> str:
@@ -260,43 +285,46 @@ def _r2_url(account_id: str, eu: bool) -> str:
     return f"https://{account_id}.{region}r2.cloudflarestorage.com"
 
 
-def _parse_fstab_url(name: str):
-    """Return (account_id, eu_jurisdiction) from the fstab entry for name."""
+def _write_rclone_conf(name: str, account_id: str, access_key_id: str,
+                       secret: str, eu: bool):
+    endpoint = _r2_url(account_id, eu)
+    content = (
+        f"[{name}]\n"
+        f"type = s3\n"
+        f"provider = Cloudflare\n"
+        f"access_key_id = {access_key_id}\n"
+        f"secret_access_key = {secret}\n"
+        f"endpoint = {endpoint}\n"
+    )
+    path = f"{RCLONE_CONF_PFX}{name}.conf"
+    with open(path, "w") as f:
+        f.write(content)
+    os.chmod(path, 0o600)
+
+
+def _parse_rclone_conf(name: str) -> dict:
+    path = f"{RCLONE_CONF_PFX}{name}.conf"
+    cfg = {}
     try:
-        with open(FSTAB) as f:
+        with open(path) as f:
             for line in f:
-                if line.startswith(f"s3fs#{name} "):
-                    m = re.search(r"url=https://([^.]+)\.((?:eu\.)?r2\.cloudflarestorage\.com)", line)
-                    if m:
-                        return m.group(1), "eu." in m.group(2)
+                line = line.strip()
+                if not line or line.startswith("[") or line.startswith("#"):
+                    continue
+                k, _, v = line.partition("=")
+                cfg[k.strip()] = v.strip()
     except FileNotFoundError:
         pass
-    return None, False
-
-
-def _rewrite_fstab_without(name: str):
-    with open(FSTAB) as f:
-        lines = f.readlines()
-    with open(FSTAB, "w") as f:
-        for line in lines:
-            if not line.startswith(f"s3fs#{name} "):
-                f.write(line)
-
-
-def _rewrite_fstab_replace(name: str, new_line: str):
-    with open(FSTAB) as f:
-        lines = f.readlines()
-    replaced = False
-    with open(FSTAB, "w") as f:
-        for line in lines:
-            if line.startswith(f"s3fs#{name} "):
-                f.write(new_line)
-                replaced = True
-            else:
-                f.write(line)
-    if not replaced:
-        with open(FSTAB, "a") as f:
-            f.write(new_line)
+    endpoint = cfg.get("endpoint", "")
+    eu = ".eu.r2." in endpoint
+    m = re.search(r"https://([^.]+)\.", endpoint)
+    account_id = m.group(1) if m else ""
+    return {
+        "account_id":        account_id,
+        "eu_jurisdiction":   eu,
+        "access_key_id":     cfg.get("access_key_id", ""),
+        "secret_access_key": cfg.get("secret_access_key", ""),
+    }
 
 
 def _smb_conf_has_share(name: str) -> bool:
@@ -323,14 +351,13 @@ def _smb_conf_append_share(name: str, samba_user: str):
 def _smb_conf_remove_share(name: str):
     with open(SMB_CONF) as f:
         lines = f.readlines()
-    out = []
-    skip = False
+    out, skip = [], False
     for line in lines:
-        stripped = line.strip()
-        if stripped == f"[{name}]":
+        s = line.strip()
+        if s == f"[{name}]":
             skip = True
             continue
-        if skip and stripped.startswith("[") and stripped.endswith("]"):
+        if skip and s.startswith("[") and s.endswith("]"):
             skip = False
         if not skip:
             out.append(line)
@@ -341,15 +368,14 @@ def _smb_conf_remove_share(name: str):
 def _smb_conf_update_user(name: str, new_user: str):
     with open(SMB_CONF) as f:
         lines = f.readlines()
-    in_section = False
-    out = []
+    in_section, out = False, []
     for line in lines:
-        stripped = line.strip()
-        if stripped == f"[{name}]":
+        s = line.strip()
+        if s == f"[{name}]":
             in_section = True
-        elif in_section and stripped.startswith("["):
+        elif in_section and s.startswith("["):
             in_section = False
-        if in_section and stripped.lower().startswith("valid users"):
+        if in_section and s.lower().startswith("valid users"):
             line = f"   valid users = {new_user}\n"
         out.append(line)
     with open(SMB_CONF, "w") as f:
@@ -365,7 +391,7 @@ def _ensure_samba_user(username: str, password: str):
 
 def _unmount(name: str):
     mount = f"{MOUNT_PREFIX}{name}"
-    r = _run("fusermount", "-u", mount, check=False)
+    r = _run("fusermount3", "-uz", mount, check=False)
     if r.returncode != 0:
         _run("umount", "-l", mount, check=False)
 
@@ -409,17 +435,16 @@ def get_stats():
     sections = _parse_smb_conf()
     shares = []
     for name in sections:
-        cache_path = f"{CACHE_PREFIX}{name}"
         cache_bytes = 0
         try:
-            result = _run("du", "-sb", cache_path, check=False)
-            if result.returncode == 0:
-                cache_bytes = int(result.stdout.split()[0])
+            r = _run("du", "-sb", f"{CACHE_PREFIX}{name}", check=False)
+            if r.returncode == 0:
+                cache_bytes = int(r.stdout.split()[0])
         except Exception:
             pass
         shares.append({
-            "name": name,
-            "mounted": _is_mounted(name),
+            "name":        name,
+            "mounted":     _is_mounted(name),
             "cache_bytes": cache_bytes,
         })
 
@@ -442,11 +467,11 @@ def get_stats():
         pass
 
     return jsonify({
-        "timestamp": time.time(),
-        "network": _net_stats(),
-        "memory": _mem_stats(),
-        "load_1": load,
-        "shares": shares,
+        "timestamp":    time.time(),
+        "network":      _net_stats(),
+        "memory":       _mem_stats(),
+        "load_1":       load,
+        "shares":       shares,
         "watchdog_log": watchdog_log,
     })
 
@@ -457,14 +482,10 @@ def get_stats():
 @require_login
 def list_shares():
     sections = _parse_smb_conf()
-    result = []
-    for name, attrs in sections.items():
-        result.append({
-            "name": name,
-            "samba_user": attrs.get("valid users", ""),
-            "mounted": _is_mounted(name),
-        })
-    return jsonify(result)
+    return jsonify([
+        {"name": name, "samba_user": attrs.get("valid users", ""), "mounted": _is_mounted(name)}
+        for name, attrs in sections.items()
+    ])
 
 
 @app.route("/api/shares/<name>")
@@ -473,66 +494,45 @@ def get_share(name):
     err = _validate_name(name)
     if err:
         return err
-
     sections = _parse_smb_conf()
     if name not in sections:
         return jsonify({"error": "Share not found"}), 404
-
-    cred_file = f"{CRED_PREFIX}{name}"
-    try:
-        cred = open(cred_file).read().strip()
-        access_key_id, _, secret = cred.partition(":")
-    except FileNotFoundError:
-        access_key_id = secret = ""
-
-    account_id, eu = _parse_fstab_url(name)
+    creds = _parse_rclone_conf(name)
     return jsonify({
-        "name": name,
+        "name":       name,
         "samba_user": sections[name].get("valid users", ""),
-        "access_key_id": access_key_id,
-        "secret_access_key": secret,
-        "account_id": account_id or "",
-        "eu_jurisdiction": eu,
+        **creds,
     })
 
 
 @app.route("/api/shares", methods=["POST"])
 @require_login
 def create_share():
-    data = request.get_json(silent=True) or {}
-    name = data.get("name", "")
-
-    err = _validate_name(name)
+    data          = request.get_json(silent=True) or {}
+    name          = data.get("name", "")
+    err           = _validate_name(name)
     if err:
         return err
     if _smb_conf_has_share(name):
         return jsonify({"error": f"Share '{name}' already exists"}), 409
 
-    account_id = data.get("account_id", "").strip()
-    eu = bool(data.get("eu", True))
+    account_id    = data.get("account_id", "").strip()
+    eu            = bool(data.get("eu", True))
     access_key_id = data.get("access_key_id", "").strip()
-    secret = data.get("secret_access_key", "").strip()
-    samba_user = re.sub(r"[^a-zA-Z0-9_.-]", "", data.get("samba_user", "")) or "backupuser"
-    samba_password = data.get("samba_password", "")
+    secret        = data.get("secret_access_key", "").strip()
+    samba_user    = re.sub(r"[^a-zA-Z0-9_.-]", "", data.get("samba_user", "")) or "backupuser"
+    samba_password= data.get("samba_password", "")
 
     if not all([account_id, access_key_id, secret, samba_password]):
         return jsonify({"error": "Missing required fields"}), 400
 
     try:
-        cred_file = f"{CRED_PREFIX}{name}"
-        with open(cred_file, "w") as f:
-            f.write(f"{access_key_id}:{secret}\n")
-        os.chmod(cred_file, 0o600)
-
+        _write_rclone_conf(name, account_id, access_key_id, secret, eu)
         os.makedirs(f"{MOUNT_PREFIX}{name}", exist_ok=True)
         os.makedirs(f"{CACHE_PREFIX}{name}", exist_ok=True)
-
-        url = _r2_url(account_id, eu)
-        _rewrite_fstab_replace(name, _fstab_line(name, url))
-
+        _write_mount_service(name)
         _run("systemctl", "daemon-reload")
-        _run("mount", f"{MOUNT_PREFIX}{name}")
-
+        _run("systemctl", "enable", "--now", _service_name(name))
         _smb_conf_append_share(name, samba_user)
         _ensure_samba_user(samba_user, samba_password)
         _run("systemctl", "reload", "smbd")
@@ -548,40 +548,38 @@ def update_share(name):
     err = _validate_name(name)
     if err:
         return err
-
     sections = _parse_smb_conf()
     if name not in sections:
         return jsonify({"error": "Share not found"}), 404
 
-    data = request.get_json(silent=True) or {}
-    account_id = data.get("account_id", "").strip()
-    eu = bool(data.get("eu", True))
+    data          = request.get_json(silent=True) or {}
+    account_id    = data.get("account_id", "").strip()
+    eu            = bool(data.get("eu", True))
     access_key_id = data.get("access_key_id", "").strip()
-    secret = data.get("secret_access_key", "").strip()
-    samba_user = re.sub(r"[^a-zA-Z0-9_.-]", "", data.get("samba_user", "")) or sections[name].get("valid users", "backupuser")
-    samba_password = data.get("samba_password", "")
+    secret        = data.get("secret_access_key", "").strip()
+    samba_user    = re.sub(r"[^a-zA-Z0-9_.-]", "", data.get("samba_user", "")) \
+                    or sections[name].get("valid users", "backupuser")
+    samba_password= data.get("samba_password", "")
 
     try:
-        if access_key_id and secret:
-            cred_file = f"{CRED_PREFIX}{name}"
-            with open(cred_file, "w") as f:
-                f.write(f"{access_key_id}:{secret}\n")
-            os.chmod(cred_file, 0o600)
-
-        if account_id:
-            url = _r2_url(account_id, eu)
-            _rewrite_fstab_replace(name, _fstab_line(name, url))
-            _run("systemctl", "daemon-reload")
+        creds_changed = access_key_id and secret
+        if creds_changed or account_id:
+            current = _parse_rclone_conf(name)
+            _write_rclone_conf(
+                name,
+                account_id    or current["account_id"],
+                access_key_id or current["access_key_id"],
+                secret        or current["secret_access_key"],
+                eu,
+            )
             _unmount(name)
-            _run("mount", f"{MOUNT_PREFIX}{name}")
+            _run("systemctl", "restart", _service_name(name))
 
         old_user = sections[name].get("valid users", "")
         if samba_user and samba_user != old_user:
             _smb_conf_update_user(name, samba_user)
-
         if samba_password:
             _ensure_samba_user(samba_user or old_user, samba_password)
-
         _run("systemctl", "reload", "smbd")
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 500
@@ -595,25 +593,26 @@ def delete_share(name):
     err = _validate_name(name)
     if err:
         return err
-
     sections = _parse_smb_conf()
     if name not in sections:
         return jsonify({"error": "Share not found"}), 404
 
     try:
-        _unmount(name)
-        _rewrite_fstab_without(name)
-        _smb_conf_remove_share(name)
-
-        cred_file = f"{CRED_PREFIX}{name}"
+        svc = _service_name(name)
+        _run("systemctl", "disable", "--now", svc, check=False)
+        svc_path = f"/etc/systemd/system/{svc}"
         try:
-            os.unlink(cred_file)
+            os.unlink(svc_path)
         except FileNotFoundError:
             pass
-
+        _unmount(name)
+        _smb_conf_remove_share(name)
+        try:
+            os.unlink(f"{RCLONE_CONF_PFX}{name}.conf")
+        except FileNotFoundError:
+            pass
         shutil.rmtree(f"{MOUNT_PREFIX}{name}", ignore_errors=True)
         shutil.rmtree(f"{CACHE_PREFIX}{name}", ignore_errors=True)
-
         _run("systemctl", "daemon-reload")
         _run("systemctl", "reload", "smbd")
     except RuntimeError as e:
@@ -653,16 +652,18 @@ def get_settings():
         "snmp_enabled":   cfg.get("snmp_enabled", "false") == "true",
         "snmp_community": cfg.get("snmp_community", "public"),
         "snmp_allowed":   cfg.get("snmp_allowed", ""),
+        "vfs_cache_gb":   int(cfg.get("vfs_cache_gb", "50")),
     })
 
 
 @app.route("/api/settings", methods=["POST"])
 @require_login
 def save_settings():
-    data = request.get_json(silent=True) or {}
+    data          = request.get_json(silent=True) or {}
     snmp_enabled  = bool(data.get("snmp_enabled", False))
     community     = re.sub(r"[^a-zA-Z0-9_-]", "", data.get("snmp_community", "public")) or "public"
     allowed       = re.sub(r"[^a-zA-Z0-9._:/\-]", "", data.get("snmp_allowed", "").strip())
+    vfs_cache_gb  = max(1, int(data.get("vfs_cache_gb", 50)))
 
     try:
         _apply_snmp(snmp_enabled, community, allowed)
@@ -670,7 +671,16 @@ def save_settings():
             "snmp_enabled":   "true" if snmp_enabled else "false",
             "snmp_community": community,
             "snmp_allowed":   allowed,
+            "vfs_cache_gb":   str(vfs_cache_gb),
         })
+        # Regenerate and restart all mount services with new cache size
+        sections = _parse_smb_conf()
+        if sections:
+            for name in sections:
+                _write_mount_service(name)
+            _run("systemctl", "daemon-reload")
+            for name in sections:
+                _run("systemctl", "restart", _service_name(name), check=False)
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 500
 
