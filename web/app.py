@@ -586,6 +586,29 @@ def update_share(name):
     return jsonify({"ok": True})
 
 
+@app.route("/api/shares/<name>/clean-cache", methods=["POST"])
+@require_login
+def clean_cache(name):
+    err = _validate_name(name)
+    if err:
+        return err
+    if name not in _parse_smb_conf():
+        return jsonify({"error": "Share not found"}), 404
+
+    cache_dir = f"{CACHE_PREFIX}{name}"
+    svc = _service_name(name)
+    try:
+        _run("systemctl", "stop", svc, check=False)
+        _unmount(name)
+        shutil.rmtree(cache_dir, ignore_errors=True)
+        os.makedirs(cache_dir, exist_ok=True)
+        _run("systemctl", "start", svc, check=False)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify({"ok": True})
+
+
 @app.route("/api/shares/<name>", methods=["DELETE"])
 @require_login
 def delete_share(name):

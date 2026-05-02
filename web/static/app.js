@@ -122,6 +122,7 @@
         </div>
         <div class="share-card__actions">
           <button class="btn-secondary btn-edit" data-name="${esc(s.name)}">Edit</button>
+          <button class="btn-ghost btn-clean" data-name="${esc(s.name)}">Clean cache</button>
           <button class="btn-danger btn-delete" data-name="${esc(s.name)}">Delete</button>
         </div>`;
       sharesGrid.appendChild(card);
@@ -129,6 +130,9 @@
 
     sharesGrid.querySelectorAll(".btn-edit").forEach((btn) =>
       btn.addEventListener("click", () => openEditModal(btn.dataset.name))
+    );
+    sharesGrid.querySelectorAll(".btn-clean").forEach((btn) =>
+      btn.addEventListener("click", () => confirmCleanCache(btn.dataset.name))
     );
     sharesGrid.querySelectorAll(".btn-delete").forEach((btn) =>
       btn.addEventListener("click", () => confirmDelete(btn.dataset.name))
@@ -236,6 +240,20 @@
       loadShares();
     } catch (err) {
       alert(`Failed to delete share: ${err.message}`);
+    }
+  }
+
+  // ─── Clean cache ────────────────────────────────────────────────────────────
+  async function confirmCleanCache(name) {
+    if (!confirm(
+      `Clean local VFS cache for "${name}"?\n\n` +
+      `The mount will restart. Files not yet uploaded to R2 will need to be re-sent by the backup client.`
+    )) return;
+    try {
+      await api("POST", `/api/shares/${encodeURIComponent(name)}/clean-cache`);
+      loadShares();
+    } catch (err) {
+      alert(`Failed to clean cache: ${err.message}`);
     }
   }
 
