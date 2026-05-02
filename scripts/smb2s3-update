@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 RAW=https://raw.githubusercontent.com/jonaskul/smb2s3/main
+mkdir -p /etc/smb2s3 /opt/smb2s3/static
 curl -fsSL ${RAW}/web/app.py                -o /opt/smb2s3/app.py
 curl -fsSL ${RAW}/web/static/index.html    -o /opt/smb2s3/static/index.html
 curl -fsSL ${RAW}/web/static/app.js        -o /opt/smb2s3/static/app.js
