@@ -244,13 +244,52 @@
   }
 
   // ─── Clean cache ────────────────────────────────────────────────────────────
+  function fmtMb(bytes) {
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)} KB`;
+    if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(0)} MB`;
+    return `${(bytes / 1073741824).toFixed(2)} GB`;
+  }
+
   async function confirmCleanCache(name) {
-    if (!confirm(
-      `Clean local VFS cache for "${name}"?\n\n` +
-      `The mount will restart. Files not yet uploaded to R2 will need to be re-sent by the backup client.`
-    )) return;
+    let status;
     try {
-      await api("POST", `/api/shares/${encodeURIComponent(name)}/clean-cache`);
+      status = await api("GET", `/api/shares/${encodeURIComponent(name)}/cache-status`);
+    } catch (err) {
+      alert(`Could not read cache status: ${err.message}`);
+      return;
+    }
+
+    const { stale_bytes, dirty_bytes, stale_count, dirty_count } = status;
+
+    if (stale_bytes === 0 && dirty_bytes === 0) {
+      alert(`Cache for "${name}" is already empty.`);
+      return;
+    }
+
+    let msg = `Cache for "${name}":\n`;
+    if (stale_bytes > 0)
+      msg += `  ✓ ${fmtMb(stale_bytes)} already uploaded to R2 (${stale_count} file${stale_count !== 1 ? "s" : ""})\n`;
+    if (dirty_bytes > 0)
+      msg += `  ⚠ ${fmtMb(dirty_bytes)} pending upload (${dirty_count} file${dirty_count !== 1 ? "s" : ""})\n`;
+    msg += "\n";
+
+    let stale_only;
+    if (stale_bytes > 0 && dirty_bytes > 0) {
+      msg += `Clean uploaded files only (${fmtMb(stale_bytes)})?\n\nOK = clean uploaded only   Cancel = abort`;
+      if (!confirm(msg)) return;
+      stale_only = true;
+    } else if (stale_bytes > 0) {
+      msg += `All cached data is already on R2. Safe to clean all ${fmtMb(stale_bytes)}.`;
+      if (!confirm(msg)) return;
+      stale_only = true;
+    } else {
+      msg += `All cached data is pending upload. Cleaning will require re-sending from the backup client.`;
+      if (!confirm(msg)) return;
+      stale_only = false;
+    }
+
+    try {
+      await api("POST", `/api/shares/${encodeURIComponent(name)}/clean-cache`, { stale_only });
       loadShares();
     } catch (err) {
       alert(`Failed to clean cache: ${err.message}`);
