@@ -240,6 +240,11 @@ def index():
     return send_from_directory(app.static_folder, "index.html")
 
 
+@app.route("/favicon.svg")
+def favicon():
+    return send_from_directory(app.static_folder, "favicon.svg", mimetype="image/svg+xml")
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _validate_name(name: str):
