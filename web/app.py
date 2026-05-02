@@ -617,19 +617,22 @@ def update_share(name):
 
 
 def _iter_vfsmeta(name: str):
-    """Yield (meta_path, data_path) for every .vfsmeta file in the cache.
+    """Yield (meta_path, data_path) for every rclone VFS metadata entry.
 
-    rclone co-locates metadata next to the data file inside vfs/:
-      vfs/some/path/file.ext          <- data
-      vfs/some/path/file.ext.vfsmeta  <- metadata
+    rclone mirrors the remote path in two sibling directories:
+      vfsMeta/remote/path/file.ext  <- rclone JSON metadata (Dirty flag etc.)
+      vfs/remote/path/file.ext      <- actual cached data
     """
-    cache_dir = os.path.join(CACHE_PREFIX, name)
-    for root, _, files in os.walk(cache_dir):
+    meta_dir = os.path.join(CACHE_PREFIX, name, "vfsMeta")
+    data_dir = os.path.join(CACHE_PREFIX, name, "vfs")
+    if not os.path.isdir(meta_dir):
+        return
+    for root, _, files in os.walk(meta_dir):
         for fname in files:
-            if fname.endswith(".vfsmeta"):
-                meta_path = os.path.join(root, fname)
-                data_path = meta_path[: -len(".vfsmeta")]
-                yield meta_path, data_path
+            meta_path = os.path.join(root, fname)
+            rel       = os.path.relpath(meta_path, meta_dir)
+            data_path = os.path.join(data_dir, rel)
+            yield meta_path, data_path
 
 
 def _scan_cache(name: str) -> dict:
