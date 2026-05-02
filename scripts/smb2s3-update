@@ -8,7 +8,8 @@ curl -fsSL ${RAW}/web/static/app.js        -o /opt/smb2s3/static/app.js
 curl -fsSL ${RAW}/web/static/style.css     -o /opt/smb2s3/static/style.css
 curl -fsSL ${RAW}/web/static/favicon.svg   -o /opt/smb2s3/static/favicon.svg
 curl -fsSL ${RAW}/web/version           -o /etc/smb2s3/version
-curl -fsSL ${RAW}/scripts/smb2s3-update -o /usr/local/bin/smb2s3-update
-chmod +x /usr/local/bin/smb2s3-update
+curl -fsSL ${RAW}/scripts/smb2s3-update -o /usr/local/bin/smb2s3-update.new
+chmod +x /usr/local/bin/smb2s3-update.new
+mv -f /usr/local/bin/smb2s3-update.new /usr/local/bin/smb2s3-update
 systemctl restart smb2s3-web
 echo "smb2s3 updated to $(cat /etc/smb2s3/version)."
