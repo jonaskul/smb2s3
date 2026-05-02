@@ -701,55 +701,6 @@ def cache_status(name):
     return jsonify(_scan_cache(name))
 
 
-@app.route("/api/shares/<name>/cache-debug")
-@require_login
-def cache_debug(name):
-    err = _validate_name(name)
-    if err:
-        return err
-    cache_dir = os.path.join(CACHE_PREFIX, name)
-    meta_dir  = os.path.join(cache_dir, "vfsMeta")
-    data_dir  = os.path.join(cache_dir, "vfs")
-
-    # Disk usage per top-level subdir
-    du = {}
-    for d in ("vfs", "vfsMeta"):
-        p = os.path.join(cache_dir, d)
-        try:
-            r = subprocess.run(["du", "-sb", p], capture_output=True, text=True)
-            du[d] = int(r.stdout.split()[0]) if r.returncode == 0 else -1
-        except Exception:
-            du[d] = -1
-
-    # Sample content of first vfsMeta file
-    sample = None
-    for root, _, files in os.walk(meta_dir):
-        for fname in files:
-            path = os.path.join(root, fname)
-            rel  = os.path.relpath(path, meta_dir)
-            try:
-                raw = open(path, "rb").read(512)
-                try:
-                    sample = {"path": rel, "content": raw.decode("utf-8", errors="replace")}
-                except Exception:
-                    sample = {"path": rel, "content": repr(raw[:64])}
-            except Exception:
-                pass
-            break
-        if sample:
-            break
-
-    # Scan result
-    scan = _scan_cache(name)
-
-    return jsonify({
-        "cache_dir":    cache_dir,
-        "du":           du,
-        "vfsmeta_sample": sample,
-        "scan":         scan,
-    })
-
-
 @app.route("/api/shares/<name>/clean-cache", methods=["POST"])
 @require_login
 def clean_cache(name):
