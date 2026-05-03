@@ -215,6 +215,18 @@
         </div>
       </div>
 
+      <div class="settings-section">
+        <div class="settings-section__title">Config Backup / Restore</div>
+        <p class="settings-section__desc">
+          Export all share definitions, credentials, and settings to a JSON file.
+          Use it to restore the container after a reinstall.
+        </p>
+        <div class="settings-backup-row">
+          <button type="button" id="cfg-backup-btn" class="btn-ghost">↓ Download config</button>
+          <button type="button" id="cfg-restore-btn" class="btn-ghost">↑ Restore config</button>
+        </div>
+      </div>
+
       <p id="settings-error" class="error-msg" hidden></p>
 
       <div class="modal-actions">

@@ -594,6 +594,12 @@ hr {
   transition: opacity 0.2s;
 }
 
+.settings-backup-row {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
 /* ─── Clean-cache modal ──────────────────────────────────────────────────────── */
 
 #clean-cache-overlay {

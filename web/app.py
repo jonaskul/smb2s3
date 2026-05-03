@@ -1,3 +1,5 @@
+import datetime
+import glob
 import hashlib
 import json
 import os
@@ -9,7 +11,7 @@ import time
 import urllib.request
 from functools import wraps
 
-from flask import Flask, jsonify, request, send_from_directory, session
+from flask import Flask, Response, jsonify, request, send_from_directory, session
 
 app = Flask(__name__, static_folder="static")
 
@@ -881,6 +883,78 @@ def save_settings():
         return jsonify({"error": str(e)}), 500
 
     return jsonify({"ok": True})
+
+
+# ─── API: config backup / restore ────────────────────────────────────────────
+
+_BACKUP_PATHS_STATIC = [
+    "/etc/smb2s3/admin.conf",
+    "/etc/smb2s3/settings.conf",
+    "/etc/samba/smb.conf",
+]
+_RESTORE_PATH_RE = re.compile(
+    r"^(/etc/smb2s3/(admin|settings)\.conf"
+    r"|/etc/samba/smb\.conf"
+    r"|/etc/rclone-[a-zA-Z0-9_.\-]+\.conf"
+    r"|/etc/systemd/system/smb2s3-mount-[a-zA-Z0-9_.\-]+\.service)$"
+)
+
+
+@app.route("/api/config-backup")
+@require_login
+def config_backup():
+    paths = list(_BACKUP_PATHS_STATIC)
+    paths += glob.glob("/etc/rclone-*.conf")
+    paths += glob.glob("/etc/systemd/system/smb2s3-mount-*.service")
+    files = {}
+    for p in paths:
+        try:
+            with open(p) as f:
+                files[p] = f.read()
+        except FileNotFoundError:
+            pass
+    payload = json.dumps({"version": 1, "files": files}, indent=2)
+    today = datetime.date.today().isoformat()
+    return Response(
+        payload,
+        mimetype="application/json",
+        headers={"Content-Disposition": f"attachment; filename=smb2s3-config-{today}.json"},
+    )
+
+
+@app.route("/api/config-restore", methods=["POST"])
+@require_login
+def config_restore():
+    data = request.get_json(force=True, silent=True)
+    if not data or data.get("version") != 1 or not isinstance(data.get("files"), dict):
+        return jsonify(error="Invalid backup file"), 400
+    for path in data["files"]:
+        if not _RESTORE_PATH_RE.match(path):
+            return jsonify(error=f"Unexpected path in backup: {path!r}"), 400
+    for path, content in data["files"].items():
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(content)
+        if path.endswith(".conf"):
+            os.chmod(path, 0o600)
+    # Ensure mount dirs exist for any restored rclone confs
+    for path in data["files"]:
+        m = re.match(r"^/etc/rclone-([^/]+)\.conf$", path)
+        if m:
+            name = m.group(1)
+            os.makedirs(f"{MOUNT_PREFIX}{name}", exist_ok=True)
+            os.makedirs(f"{CACHE_PREFIX}{name}", exist_ok=True)
+    subprocess.run(["systemctl", "daemon-reload"], check=False)
+    subprocess.run(["systemctl", "restart", "smbd"], check=False)
+    subprocess.run(["systemctl", "restart", "smb2s3-watchdog.timer"], check=False)
+    # Restart web service in background so this response is sent first
+    pid = os.fork()
+    if pid == 0:
+        os.setsid()
+        time.sleep(1)
+        subprocess.run(["systemctl", "restart", "smb2s3-web"], check=False)
+        os._exit(0)
+    return jsonify(ok=True)
 
 
 _ensure_rclone_services()

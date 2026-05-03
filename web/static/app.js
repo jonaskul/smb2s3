@@ -518,6 +518,8 @@
   const sSnmpCommunity  = document.getElementById("s-snmp-community");
   const sSnmpAllowed    = document.getElementById("s-snmp-allowed");
   const snmpFields      = document.getElementById("snmp-fields");
+  const cfgBackupBtn    = document.getElementById("cfg-backup-btn");
+  const cfgRestoreBtn   = document.getElementById("cfg-restore-btn");
 
   document.getElementById("settings-btn").addEventListener("click", openSettings);
   settingsCancel.addEventListener("click", closeSettings);
@@ -581,6 +583,54 @@
       settingsSave.disabled = false;
       settingsSave.textContent = "Save";
     }
+  });
+
+  // ─── Config backup / restore ────────────────────────────────────────────────
+  cfgBackupBtn.addEventListener("click", () => {
+    window.location = "/api/config-backup";
+  });
+
+  cfgRestoreBtn.addEventListener("click", () => {
+    const inp = document.createElement("input");
+    inp.type = "file";
+    inp.accept = ".json,application/json";
+    inp.onchange = async () => {
+      if (!inp.files.length) return;
+      let parsed;
+      try {
+        parsed = JSON.parse(await inp.files[0].text());
+      } catch {
+        settingsError.textContent = "Invalid JSON file";
+        settingsError.hidden = false;
+        return;
+      }
+      settingsError.hidden = true;
+      cfgRestoreBtn.disabled = true;
+      cfgBackupBtn.disabled  = true;
+      settingsSave.disabled  = true;
+      try {
+        await api("POST", "/api/config-restore", parsed);
+      } catch (err) {
+        settingsError.textContent = "Restore failed: " + err.message;
+        settingsError.hidden = false;
+        cfgRestoreBtn.disabled = false;
+        cfgBackupBtn.disabled  = false;
+        settingsSave.disabled  = false;
+        return;
+      }
+      closeSettings();
+      updateOverlay.hidden  = false;
+      updateMsg.textContent = "Config restored — reconnecting…";
+      const poll = async () => {
+        try {
+          const res = await fetch("/", { cache: "no-store" });
+          if (res.ok) { location.reload(); return; }
+        } catch (_) {}
+        setTimeout(poll, 1500);
+      };
+      setTimeout(poll, 2000);
+    };
+    inp.click();
   });
 
   // ─── Init ───────────────────────────────────────────────────────────────────

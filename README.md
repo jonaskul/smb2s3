@@ -92,6 +92,8 @@ The ⚙ Settings button in the top bar provides:
 | `proc python3` | Web UI process count (alerts if 0) |
 | `osupdate` | Number of pending apt upgrades |
 
+- **Config backup / restore** — export all share definitions, R2 credentials, and settings to a JSON file. Use it to restore the container after a reinstall. All data lives in R2 — a config backup is all that is needed for disaster recovery.
+
 ### Version and updates
 
 The topbar shows the installed version. If a newer version is available on GitHub, an **↑ Update** button appears. Clicking it runs `smb2s3-update` in the background, shows a spinner, and reloads the page automatically when the service is back up.
