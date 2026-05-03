@@ -598,6 +598,19 @@ hr {
   display: flex;
   gap: 0.6rem;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.bucket-select {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.45rem 0.6rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
 }
 
 /* ─── Clean-cache modal ──────────────────────────────────────────────────────── */

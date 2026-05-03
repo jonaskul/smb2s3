@@ -518,8 +518,11 @@
   const sSnmpCommunity  = document.getElementById("s-snmp-community");
   const sSnmpAllowed    = document.getElementById("s-snmp-allowed");
   const snmpFields      = document.getElementById("snmp-fields");
-  const cfgBackupBtn    = document.getElementById("cfg-backup-btn");
-  const cfgRestoreBtn   = document.getElementById("cfg-restore-btn");
+  const cfgBackupBtn      = document.getElementById("cfg-backup-btn");
+  const cfgRestoreBtn     = document.getElementById("cfg-restore-btn");
+  const cfgBucketRow      = document.getElementById("cfg-bucket-row");
+  const cfgBucketSelect   = document.getElementById("cfg-bucket-select");
+  const cfgBucketSaveBtn  = document.getElementById("cfg-bucket-save-btn");
 
   document.getElementById("settings-btn").addEventListener("click", openSettings);
   settingsCancel.addEventListener("click", closeSettings);
@@ -553,6 +556,17 @@
     } finally {
       settingsSave.disabled = false;
       settingsSave.textContent = "Save";
+    }
+    // Populate bucket select (best-effort, non-blocking)
+    try {
+      const shares = await api("GET", "/api/shares");
+      cfgBucketSelect.innerHTML = shares.length
+        ? shares.map((s) => `<option value="${esc(s.name)}">${esc(s.name)}</option>`).join("")
+        : `<option value="" disabled>No shares configured</option>`;
+      cfgBucketRow.hidden    = shares.length === 0;
+      cfgBucketSaveBtn.disabled = shares.length === 0;
+    } catch (_) {
+      cfgBucketRow.hidden = true;
     }
   }
 
@@ -588,6 +602,31 @@
   // ─── Config backup / restore ────────────────────────────────────────────────
   cfgBackupBtn.addEventListener("click", () => {
     window.location = "/api/config-backup";
+  });
+
+  cfgBucketSaveBtn.addEventListener("click", async () => {
+    const bucket = cfgBucketSelect.value;
+    if (!bucket) return;
+    cfgBucketSaveBtn.disabled = true;
+    cfgBucketSaveBtn.textContent = "Saving…";
+    settingsError.hidden = true;
+    try {
+      const r = await api("POST", "/api/config-backup-to-bucket", { bucket });
+      settingsError.style.color = "var(--success)";
+      settingsError.textContent = `Saved as ${r.filename} in bucket "${bucket}"`;
+      settingsError.hidden = false;
+      setTimeout(() => {
+        settingsError.hidden = true;
+        settingsError.style.color = "";
+      }, 4000);
+    } catch (err) {
+      settingsError.style.color = "";
+      settingsError.textContent = "Save failed: " + err.message;
+      settingsError.hidden = false;
+    } finally {
+      cfgBucketSaveBtn.disabled = false;
+      cfgBucketSaveBtn.textContent = "☁ Save to bucket";
+    }
   });
 
   cfgRestoreBtn.addEventListener("click", () => {

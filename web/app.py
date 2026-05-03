@@ -957,6 +957,36 @@ def config_restore():
     return jsonify(ok=True)
 
 
+@app.route("/api/config-backup-to-bucket", methods=["POST"])
+@require_login
+def config_backup_to_bucket():
+    data   = request.get_json(silent=True) or {}
+    bucket = data.get("bucket", "").strip()
+    if not bucket or bucket not in _parse_smb_conf():
+        return jsonify(error="Unknown share"), 400
+    paths = list(_BACKUP_PATHS_STATIC)
+    paths += glob.glob("/etc/rclone-*.conf")
+    paths += glob.glob("/etc/systemd/system/smb2s3-mount-*.service")
+    files = {}
+    for p in paths:
+        try:
+            with open(p) as f:
+                files[p] = f.read()
+        except FileNotFoundError:
+            pass
+    payload  = json.dumps({"version": 1, "files": files}, indent=2).encode()
+    filename = f"smb2s3-config-{datetime.date.today().isoformat()}.json"
+    conf     = f"{RCLONE_CONF_PFX}{bucket}.conf"
+    result   = subprocess.run(
+        [RCLONE_BIN, "rcat", f"{bucket}:{bucket}/{filename}", "--config", conf],
+        input=payload, capture_output=True, timeout=60,
+    )
+    if result.returncode != 0:
+        msg = result.stderr.decode().strip() or "Upload failed"
+        return jsonify(error=msg), 500
+    return jsonify(ok=True, filename=filename)
+
+
 _ensure_rclone_services()
 _ensure_watchdog()
 
