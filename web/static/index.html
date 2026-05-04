@@ -150,84 +150,129 @@
 
   <!-- Settings modal -->
   <div id="settings-overlay" hidden>
-    <div class="modal-card">
+    <div class="modal-card settings-modal">
       <h2>Settings</h2>
-      <div class="settings-section">
-        <div class="settings-section__title">rclone VFS Cache</div>
-        <p class="settings-section__desc">
-          Maximum disk space per share used by rclone to cache writes before uploading to R2.
-          Changing this restarts all active mounts.
-        </p>
-        <div class="form-group">
-          <label for="s-vfs-cache-gb">Cache size per share (GB)</label>
-          <input type="text" id="s-vfs-cache-gb" placeholder="50">
-        </div>
+      <div class="settings-tabs">
+        <button class="tab-btn tab-btn--active" data-tab="perf">Performance</button>
+        <button class="tab-btn" data-tab="monitoring">Monitoring</button>
+        <button class="tab-btn" data-tab="admin">Admin</button>
       </div>
 
-      <div class="settings-section">
-        <div class="settings-section__title">rclone Performance</div>
-        <p class="settings-section__desc">
-          Tune CPU and memory usage during transfers. Changing these restarts all active mounts.
-        </p>
-        <div class="form-row">
+      <!-- Performance tab -->
+      <div id="stab-perf" class="stab">
+        <div class="settings-section">
+          <div class="settings-section__title">rclone VFS Cache</div>
+          <p class="settings-section__desc">
+            Maximum disk space per share used by rclone to cache writes before uploading to R2.
+            Changing this restarts all active mounts.
+          </p>
           <div class="form-group">
-            <label for="s-transfers">Transfers</label>
-            <input type="number" id="s-transfers" min="1" max="16" placeholder="2">
-          </div>
-          <div class="form-group">
-            <label for="s-checkers">Checkers</label>
-            <input type="number" id="s-checkers" min="1" max="16" placeholder="2">
+            <label for="s-vfs-cache-gb">Cache size per share (GB)</label>
+            <input type="text" id="s-vfs-cache-gb" placeholder="70">
           </div>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="s-buffer-mb">Buffer per transfer (MB)</label>
-            <input type="number" id="s-buffer-mb" min="8" max="1024" placeholder="64">
-          </div>
-          <div class="form-group">
-            <label for="s-write-back-s">Write-back delay (s)</label>
-            <input type="number" id="s-write-back-s" min="1" max="60" placeholder="5">
-          </div>
-        </div>
-      </div>
 
-      <div class="settings-section">
-        <div class="settings-section__title">SNMP Monitoring</div>
-        <p class="settings-section__desc">
-          Exposes system metrics on UDP port 161 (SNMPv2c). Compatible with
-          <strong>LibreNMS</strong> and Zabbix (<strong>Linux by SNMP</strong> template).
-          Includes disk, process, OS version, and pending update extensions.
-        </p>
-        <div class="form-group form-group--check">
-          <label><input type="checkbox" id="s-snmp-enabled"> Enable SNMP (installs snmpd)</label>
-        </div>
-        <div id="snmp-fields">
+        <div class="settings-section">
+          <div class="settings-section__title">rclone Performance</div>
+          <p class="settings-section__desc">
+            Tune CPU and memory usage during transfers. Changing these restarts all active mounts.
+          </p>
           <div class="form-row">
             <div class="form-group">
-              <label for="s-snmp-community">Community string</label>
-              <input type="text" id="s-snmp-community" placeholder="public">
+              <label for="s-transfers">Transfers</label>
+              <input type="number" id="s-transfers" min="1" max="16" placeholder="2">
             </div>
             <div class="form-group">
-              <label for="s-snmp-allowed">Allowed host / CIDR</label>
-              <input type="text" id="s-snmp-allowed" placeholder="192.168.1.10 (empty = any)">
+              <label for="s-checkers">Checkers</label>
+              <input type="number" id="s-checkers" min="1" max="16" placeholder="2">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="s-buffer-mb">Buffer per transfer (MB)</label>
+              <input type="number" id="s-buffer-mb" min="8" max="1024" placeholder="64">
+            </div>
+            <div class="form-group">
+              <label for="s-write-back-s">Write-back delay (s)</label>
+              <input type="number" id="s-write-back-s" min="1" max="60" placeholder="5">
             </div>
           </div>
         </div>
       </div>
 
-      <div class="settings-section">
-        <div class="settings-section__title">Config Backup / Restore</div>
-        <p class="settings-section__desc">
-          Export all share definitions, credentials, and settings to a JSON file.
-          Use it to restore the container after a reinstall.
-        </p>
-        <div class="settings-backup-row">
-          <button type="button" id="cfg-backup-btn" class="btn-ghost">↓ Download config</button>
-          <button type="button" id="cfg-restore-btn" class="btn-ghost">↑ Restore config</button>
+      <!-- Monitoring tab -->
+      <div id="stab-monitoring" class="stab" hidden>
+        <div class="settings-section">
+          <div class="settings-section__title">SNMP Monitoring</div>
+          <p class="settings-section__desc">
+            Exposes system metrics on UDP port 161 (SNMPv2c). Compatible with
+            <strong>LibreNMS</strong> and Zabbix (<strong>Linux by SNMP</strong> template).
+            Includes disk, process, OS version, and pending update extensions.
+          </p>
+          <div class="form-group form-group--check">
+            <label><input type="checkbox" id="s-snmp-enabled"> Enable SNMP (installs snmpd)</label>
+          </div>
+          <div id="snmp-fields">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="s-snmp-community">Community string</label>
+                <input type="text" id="s-snmp-community" placeholder="public">
+              </div>
+              <div class="form-group">
+                <label for="s-snmp-allowed">Allowed host / CIDR</label>
+                <input type="text" id="s-snmp-allowed" placeholder="192.168.1.10 (empty = any)">
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="settings-backup-row" id="cfg-bucket-row">
-          <select id="cfg-bucket-select" class="bucket-select"></select>
-          <button type="button" id="cfg-bucket-save-btn" class="btn-ghost">☁ Save to bucket</button>
+      </div>
+
+      <!-- Admin tab -->
+      <div id="stab-admin" class="stab" hidden>
+        <div class="settings-section">
+          <div class="settings-section__title">Change Password</div>
+          <div class="form-group">
+            <label for="s-cur-pw">Current password</label>
+            <input type="password" id="s-cur-pw" autocomplete="current-password">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="s-new-pw">New password</label>
+              <input type="password" id="s-new-pw" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+              <label for="s-confirm-pw">Confirm</label>
+              <input type="password" id="s-confirm-pw" autocomplete="new-password">
+            </div>
+          </div>
+          <button type="button" id="s-change-pw-btn" class="btn-secondary">Change password</button>
+          <p id="s-pw-msg" class="settings-msg" hidden></p>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section__title">Authentication</div>
+          <div class="form-group form-group--check">
+            <label><input type="checkbox" id="s-no-auth"> Disable login requirement</label>
+          </div>
+          <p class="settings-section__desc settings-section__desc--warn">
+            Anyone with network access to port 8080 will have full access without a password.
+          </p>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section__title">Config Backup / Restore</div>
+          <p class="settings-section__desc">
+            Export all share definitions, credentials, and settings to a JSON file.
+            Use it to restore the container after a reinstall.
+          </p>
+          <div class="settings-backup-row">
+            <button type="button" id="cfg-backup-btn" class="btn-ghost">↓ Download config</button>
+            <button type="button" id="cfg-restore-btn" class="btn-ghost">↑ Restore config</button>
+          </div>
+          <div class="settings-backup-row" id="cfg-bucket-row">
+            <select id="cfg-bucket-select" class="bucket-select"></select>
+            <button type="button" id="cfg-bucket-save-btn" class="btn-ghost">☁ Save to bucket</button>
+          </div>
         </div>
       </div>
 
@@ -236,6 +281,20 @@
       <div class="modal-actions">
         <button type="button" id="settings-cancel" class="btn-ghost">Cancel</button>
         <button type="button" id="settings-save" class="btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Changelog / update confirm modal -->
+  <div id="changelog-overlay" hidden>
+    <div class="modal-card">
+      <h2>Update to <span id="cl-latest"></span></h2>
+      <div id="cl-loading" class="cc-loading">Loading changelog…</div>
+      <pre id="cl-body" class="changelog-body" hidden></pre>
+      <p id="cl-error" class="error-msg" hidden></p>
+      <div class="modal-actions">
+        <button type="button" id="cl-cancel" class="btn-ghost">Cancel</button>
+        <button type="button" id="cl-confirm" class="btn-primary" hidden>Update now</button>
       </div>
     </div>
   </div>
