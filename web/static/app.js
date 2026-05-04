@@ -1,6 +1,7 @@
 (() => {
   // ─── State ──────────────────────────────────────────────────────────────────
-  let editingShare = null; // null = add mode, string = edit mode
+  let editingShare  = null; // null = add mode, string = edit mode
+  let latestVersion = null;
 
   // ─── Elements ───────────────────────────────────────────────────────────────
   const loginView     = document.getElementById("login-view");
@@ -75,14 +76,19 @@
     showLogin();
   });
 
-  function showLogin(reason) {
+  async function showLogin(reason) {
     stopStats();
+    try {
+      const s = await fetch("/api/status").then((r) => r.json());
+      if (s.no_auth) { showDashboard(); return; }
+    } catch (_) {}
     dashView.hidden = true;
     loginView.hidden = false;
     loginSubmit.disabled = false;
     loginSubmit.textContent = "Sign in";
     document.getElementById("login-user").value = "";
     document.getElementById("login-pass").value = "";
+    loginError.hidden = true;
     if (reason) {
       loginError.textContent = reason;
       loginError.hidden = false;
@@ -98,10 +104,17 @@
   }
 
   // ─── Version check + update ─────────────────────────────────────────────────
-  const versionBadge  = document.getElementById("version-badge");
-  const updateBtn     = document.getElementById("update-btn");
-  const updateOverlay = document.getElementById("update-overlay");
-  const updateMsg     = document.getElementById("update-msg");
+  const versionBadge     = document.getElementById("version-badge");
+  const updateBtn        = document.getElementById("update-btn");
+  const updateOverlay    = document.getElementById("update-overlay");
+  const updateMsg        = document.getElementById("update-msg");
+  const changelogOverlay = document.getElementById("changelog-overlay");
+  const clLatest         = document.getElementById("cl-latest");
+  const clLoading        = document.getElementById("cl-loading");
+  const clBody           = document.getElementById("cl-body");
+  const clError          = document.getElementById("cl-error");
+  const clCancel         = document.getElementById("cl-cancel");
+  const clConfirm        = document.getElementById("cl-confirm");
 
   async function checkVersion() {
     versionBadge.hidden = true;
@@ -109,6 +122,7 @@
     try {
       const v = await api("GET", "/api/version");
       if (v.update_available) {
+        latestVersion            = v.latest;
         versionBadge.textContent = `v${v.installed || "?"}  →  v${v.latest}`;
         versionBadge.className   = "version-badge version-badge--update";
         updateBtn.hidden         = false;
@@ -120,16 +134,13 @@
     } catch (_) { /* no version info — stay hidden */ }
   }
 
-  updateBtn.addEventListener("click", async () => {
-    updateOverlay.hidden = false;
+  async function runUpdate() {
+    updateOverlay.hidden  = false;
     updateMsg.textContent = "Starting update…";
     try {
       await api("POST", "/api/update");
     } catch (_) { /* service restarts — connection drops, that's expected */ }
-
     updateMsg.textContent = "Restarting service — reconnecting…";
-
-    // Poll until the service is back up, then reload
     const poll = async () => {
       try {
         const res = await fetch("/", { cache: "no-store" });
@@ -138,6 +149,35 @@
       setTimeout(poll, 1500);
     };
     setTimeout(poll, 4000);
+  }
+
+  updateBtn.addEventListener("click", async () => {
+    clLatest.textContent    = latestVersion || "latest";
+    clLoading.hidden        = false;
+    clBody.hidden           = true;
+    clError.hidden          = true;
+    clConfirm.hidden        = true;
+    changelogOverlay.hidden = false;
+    try {
+      const cl = await api("GET", "/api/changelog");
+      clBody.textContent = cl.since || "(no changelog available)";
+      clBody.hidden      = false;
+      clConfirm.hidden   = false;
+    } catch (err) {
+      clError.textContent = err.message;
+      clError.hidden      = false;
+    } finally {
+      clLoading.hidden = true;
+    }
+  });
+
+  clCancel.addEventListener("click", () => { changelogOverlay.hidden = true; });
+  changelogOverlay.addEventListener("click", (e) => {
+    if (e.target === changelogOverlay) changelogOverlay.hidden = true;
+  });
+  clConfirm.addEventListener("click", () => {
+    changelogOverlay.hidden = true;
+    runUpdate();
   });
 
   // ─── Shares list ────────────────────────────────────────────────────────────
@@ -537,6 +577,12 @@
   const sSnmpCommunity  = document.getElementById("s-snmp-community");
   const sSnmpAllowed    = document.getElementById("s-snmp-allowed");
   const snmpFields      = document.getElementById("snmp-fields");
+  const sCurPw          = document.getElementById("s-cur-pw");
+  const sNewPw          = document.getElementById("s-new-pw");
+  const sConfirmPw      = document.getElementById("s-confirm-pw");
+  const sChangePwBtn    = document.getElementById("s-change-pw-btn");
+  const sPwMsg          = document.getElementById("s-pw-msg");
+  const sNoAuth         = document.getElementById("s-no-auth");
   const cfgBackupBtn      = document.getElementById("cfg-backup-btn");
   const cfgRestoreBtn     = document.getElementById("cfg-restore-btn");
   const cfgBucketRow      = document.getElementById("cfg-bucket-row");
@@ -551,6 +597,16 @@
     snmpFields.style.opacity = sSnmpEnabled.checked ? "1" : "0.4";
     snmpFields.querySelectorAll("input").forEach((i) => (i.disabled = !sSnmpEnabled.checked));
   });
+
+  // ─── Settings tabs ──────────────────────────────────────────────────────────
+  document.querySelectorAll(".tab-btn").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("tab-btn--active"));
+      document.querySelectorAll(".stab").forEach((p) => { p.hidden = true; });
+      btn.classList.add("tab-btn--active");
+      document.getElementById("stab-" + btn.dataset.tab).hidden = false;
+    })
+  );
 
   async function openSettings() {
     settingsError.hidden = true;
@@ -569,6 +625,7 @@
       sSnmpAllowed.value         = cfg.snmp_allowed;
       snmpFields.style.opacity   = cfg.snmp_enabled ? "1" : "0.4";
       snmpFields.querySelectorAll("input").forEach((i) => (i.disabled = !cfg.snmp_enabled));
+      sNoAuth.checked            = cfg.no_auth;
     } catch (err) {
       settingsError.textContent = err.message;
       settingsError.hidden = false;
@@ -607,6 +664,7 @@
         snmp_enabled:   sSnmpEnabled.checked,
         snmp_community: sSnmpCommunity.value.trim(),
         snmp_allowed:   sSnmpAllowed.value.trim(),
+        no_auth:        sNoAuth.checked,
       });
       closeSettings();
     } catch (err) {
@@ -617,6 +675,31 @@
       settingsSave.textContent = "Save";
     }
   });
+
+  // ─── Change password ────────────────────────────────────────────────────────
+  sChangePwBtn.addEventListener("click", async () => {
+    const cur = sCurPw.value;
+    const nw  = sNewPw.value;
+    const cf  = sConfirmPw.value;
+    if (nw !== cf) { showPwMsg("Passwords do not match", false); return; }
+    sChangePwBtn.disabled = true;
+    try {
+      await api("POST", "/api/change-password", { current_password: cur, new_password: nw });
+      sCurPw.value = sNewPw.value = sConfirmPw.value = "";
+      showPwMsg("Password changed", true);
+    } catch (err) {
+      showPwMsg(err.message, false);
+    } finally {
+      sChangePwBtn.disabled = false;
+    }
+  });
+
+  function showPwMsg(msg, ok) {
+    sPwMsg.textContent = msg;
+    sPwMsg.className   = "settings-msg " + (ok ? "settings-msg--ok" : "settings-msg--err");
+    sPwMsg.hidden      = false;
+    setTimeout(() => { sPwMsg.hidden = true; }, 5000);
+  }
 
   // ─── Config backup / restore ────────────────────────────────────────────────
   cfgBackupBtn.addEventListener("click", () => {
@@ -692,8 +775,15 @@
   });
 
   // ─── Init ───────────────────────────────────────────────────────────────────
-  // Try to load shares — if 401, stay on login page
-  api("GET", "/api/shares")
-    .then((shares) => { showDashboard(); renderShares(shares); })
-    .catch(() => { /* stay on login */ });
+  (async () => {
+    try {
+      const s = await fetch("/api/status").then((r) => r.json());
+      if (s.no_auth) { showDashboard(); return; }
+    } catch (_) {}
+    try {
+      const shares = await api("GET", "/api/shares");
+      showDashboard();
+      renderShares(shares);
+    } catch (_) { /* stay on login */ }
+  })();
 })();

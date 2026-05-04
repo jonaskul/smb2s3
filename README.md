@@ -1,6 +1,6 @@
 # smb2s3
 
-Creates a Debian 13 LXC on Proxmox that mounts Cloudflare R2 buckets via rclone and exposes them as SMB shares.
+Creates a Debian 13 LXC on Proxmox that mounts S3-compatible buckets via rclone and exposes them as SMB shares. Optimised for Cloudflare R2, but works with AWS S3, Wasabi, MinIO, and any other S3-compatible provider.
 
 ## What the script does
 
@@ -18,7 +18,7 @@ R2 buckets and SMB shares are configured through the web UI after setup.
 ## Requirements
 
 - Proxmox node with internet access (for template download and apt packages)
-- Cloudflare R2 bucket with API token (Access Key ID + Secret Access Key + Account ID)
+- An S3-compatible bucket with an access key (Access Key ID + Secret Access Key). For Cloudflare R2 you also need an Account ID.
 - Network access between the SMB client and the LXC
 
 ## Usage
@@ -49,8 +49,8 @@ After setup, a browser-based UI is available at `http://<CT-IP>:8080`. Log in wi
 ### Shares
 
 - View all configured SMB shares and their mount status
-- Add new R2 shares — each with its own bucket, credentials, and Samba user
-- Edit existing shares (update credentials, account ID, or Samba password)
+- Add shares from **Cloudflare R2** or any **S3-compatible provider** (AWS S3, Wasabi, MinIO, etc.) — each with its own bucket, credentials, and Samba user
+- Edit existing shares (update credentials, endpoint, or Samba password)
 - Delete shares (stops the rclone service, removes from smb.conf, cleans up cache)
 - **Clean cache** — free local disk space after uploads complete (see below)
 
@@ -74,14 +74,19 @@ Rclone also evicts uploaded files automatically after ~1 hour (`--vfs-cache-max-
 
 ### Settings
 
-The ⚙ Settings button in the top bar provides:
+The ⚙ Settings button in the top bar opens a modal with three tabs.
 
-- **VFS cache size** — maximum local disk space per share used to buffer writes before upload to R2. Changing this restarts all active mounts.
+#### Performance tab
+
+- **VFS cache size** — maximum local disk space per share used to buffer writes before upload. Changing this restarts all active mounts.
 - **rclone performance** — tune CPU and memory usage during transfers. All values restart active mounts when saved:
   - *Transfers* — concurrent upload streams (default: 2)
   - *Checkers* — concurrent checksum operations (default: 2)
   - *Buffer per transfer* — in-memory buffer in MB per stream (default: 64 MB)
   - *Write-back delay* — seconds after last write before upload starts (default: 5 s)
+
+#### Monitoring tab
+
 - **SNMP monitoring** — enable/disable `snmpd` on UDP port 161 (SNMPv2c). Includes extensions for LibreNMS and Zabbix:
 
 | Extension | Data |
@@ -92,11 +97,15 @@ The ⚙ Settings button in the top bar provides:
 | `proc python3` | Web UI process count (alerts if 0) |
 | `osupdate` | Number of pending apt upgrades |
 
-- **Config backup / restore** — export all share definitions, R2 credentials, and settings to a JSON file. Use it to restore the container after a reinstall. All data lives in R2 — a config backup is all that is needed for disaster recovery.
+#### Admin tab
+
+- **Change password** — update the web UI admin password (requires the current password).
+- **Disable login** — remove the login requirement entirely. Anyone with network access to port 8080 can manage shares without a password. Useful on isolated home networks.
+- **Config backup / restore** — export all share definitions, credentials, and settings to a JSON file. Use it to restore the container after a reinstall. All data lives in the bucket — a config backup is all that is needed for disaster recovery. You can also save the backup directly to a configured bucket.
 
 ### Version and updates
 
-The topbar shows the installed version. If a newer version is available on GitHub, an **↑ Update** button appears. Clicking it runs `smb2s3-update` in the background, shows a spinner, and reloads the page automatically when the service is back up.
+The topbar shows the installed version. If a newer version is available on GitHub, an **↑ Update** button appears. Clicking it opens a changelog showing what's new since the installed version, with a confirmation step before the update runs. The page reloads automatically when the service is back up.
 
 To update from the terminal instead:
 
@@ -127,6 +136,16 @@ Reduce *Transfers* and *Buffer per transfer* in Settings to lower CPU and memory
 ## Cloudflare R2 API token requirements
 
 The token must have **Object Read & Write** permission scoped to the specific bucket. EU jurisdiction must match the actual bucket location — a standard bucket will not respond on the EU endpoint and vice versa.
+
+## Other S3-compatible providers
+
+When adding a share, check **Other S3-compatible provider** and enter the endpoint URL instead of the R2 account ID. Examples:
+
+| Provider | Endpoint |
+|---|---|
+| AWS S3 | `https://s3.amazonaws.com` |
+| Wasabi (EU) | `https://s3.eu-central-2.wasabisys.com` |
+| MinIO (self-hosted) | `http://192.168.1.50:9000` |
 
 ## Connecting an SMB client
 

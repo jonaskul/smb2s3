@@ -672,3 +672,60 @@ hr {
   line-height: 1.5;
   margin-top: 0.25rem;
 }
+
+/* ─── Settings tabs ─────────────────────────────────────────────────────── */
+
+.settings-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab-btn {
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+.tab-btn--active {
+  color: var(--text);
+  border-bottom-color: var(--primary);
+}
+.tab-btn:hover:not(.tab-btn--active) {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+/* ─── Changelog pre ─────────────────────────────────────────────────────── */
+
+.changelog-body {
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  max-height: 340px;
+  overflow-y: auto;
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+/* ─── Admin tab helpers ──────────────────────────────────────────────────── */
+
+.settings-section__desc--warn {
+  color: var(--warning);
+}
+
+.settings-msg {
+  font-size: 0.85rem;
+  margin-top: 0.35rem;
+}
+.settings-msg--ok  { color: var(--success); }
+.settings-msg--err { color: var(--danger); }

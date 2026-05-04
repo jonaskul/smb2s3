@@ -22,6 +22,7 @@ RCLONE_CONF_PFX  = "/etc/rclone-"   # {name}.conf
 MOUNT_PREFIX     = "/mnt/r2-"
 VERSION_FILE     = "/etc/smb2s3/version"
 VERSION_URL      = "https://raw.githubusercontent.com/jonaskul/smb2s3/main/web/version"
+CHANGELOG_URL    = "https://raw.githubusercontent.com/jonaskul/smb2s3/main/web/changelog.md"
 CACHE_PREFIX     = "/var/cache/rclone/"
 
 NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$")
@@ -201,9 +202,9 @@ WantedBy=timers.target
 def require_login(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if not session.get("logged_in"):
-            return jsonify({"error": "Unauthorized"}), 401
-        return f(*args, **kwargs)
+        if _load_conf().get("no_auth") == "true" or session.get("logged_in"):
+            return f(*args, **kwargs)
+        return jsonify({"error": "Unauthorized"}), 401
     return wrapper
 
 
@@ -496,6 +497,13 @@ def get_stats():
     })
 
 
+# ─── API: status (unauthenticated) ────────────────────────────────────────────
+
+@app.route("/api/status")
+def get_status():
+    return jsonify(no_auth=_load_conf().get("no_auth") == "true")
+
+
 # ─── API: version ─────────────────────────────────────────────────────────────
 
 @app.route("/api/version")
@@ -534,6 +542,49 @@ def run_update():
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+def _changelog_since(text: str, version: str) -> str:
+    result, capturing = [], True
+    for line in text.splitlines(keepends=True):
+        if line.startswith("## ") and line[3:].strip() == version:
+            capturing = False
+        if capturing:
+            result.append(line)
+    return "".join(result).strip()
+
+
+@app.route("/api/changelog")
+@require_login
+def get_changelog():
+    try:
+        with urllib.request.urlopen(CHANGELOG_URL, timeout=5) as r:
+            full = r.read().decode()
+    except Exception:
+        return jsonify(error="Could not fetch changelog"), 503
+    installed = "unknown"
+    try:
+        with open(VERSION_FILE) as f:
+            installed = f.read().strip()
+    except FileNotFoundError:
+        pass
+    return jsonify(since=_changelog_since(full, installed))
+
+
+@app.route("/api/change-password", methods=["POST"])
+@require_login
+def change_password():
+    data   = request.get_json(silent=True) or {}
+    cur_pw = data.get("current_password", "")
+    new_pw = data.get("new_password", "").strip()
+    if _load_conf().get("no_auth") != "true" and not _verify_password(cur_pw):
+        return jsonify(error="Current password is incorrect"), 401
+    if len(new_pw) < 6:
+        return jsonify(error="Password must be at least 6 characters"), 400
+    salt = os.urandom(32)
+    h    = hashlib.pbkdf2_hmac("sha256", new_pw.encode(), salt, 260000).hex()
+    _save_conf_keys({"salt": salt.hex(), "hash": h})
+    return jsonify(ok=True)
 
 
 # ─── API: shares ──────────────────────────────────────────────────────────────
@@ -861,6 +912,7 @@ def get_settings():
         "buffer_mb":      int(cfg.get("buffer_mb",      "64")),
         "write_back_s":   int(cfg.get("write_back_s",   "5")),
         "checkers":       int(cfg.get("checkers",       "2")),
+        "no_auth":        cfg.get("no_auth", "false") == "true",
     })
 
 
@@ -869,6 +921,7 @@ def get_settings():
 def save_settings():
     data          = request.get_json(silent=True) or {}
     snmp_enabled  = bool(data.get("snmp_enabled", False))
+    no_auth       = bool(data.get("no_auth", False))
     community     = re.sub(r"[^a-zA-Z0-9_-]", "", data.get("snmp_community", "public")) or "public"
     allowed       = re.sub(r"[^a-zA-Z0-9._:/\-]", "", data.get("snmp_allowed", "").strip())
     vfs_cache_gb  = max(1, int(data.get("vfs_cache_gb", 70)))
@@ -888,6 +941,7 @@ def save_settings():
             "buffer_mb":      str(buffer_mb),
             "write_back_s":   str(write_back_s),
             "checkers":       str(checkers),
+            "no_auth":        "true" if no_auth else "false",
         })
         # Regenerate and restart all mount services with new cache size
         sections = _parse_smb_conf()
