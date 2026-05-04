@@ -1,3 +1,7 @@
+## 2026-05-03d
+- Add Share modal: field hints, live SMB path preview, labelled section divider
+- Clarify Cloudflare R2 as default provider with examples for AWS S3, Wasabi, MinIO
+
 ## 2026-05-03c
 - Changelog shown before updating
 - Change password in Settings → Admin tab
