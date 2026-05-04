@@ -295,13 +295,18 @@ def _r2_url(account_id: str, eu: bool) -> str:
     return f"https://{account_id}.{region}r2.cloudflarestorage.com"
 
 
-def _write_rclone_conf(name: str, account_id: str, access_key_id: str,
-                       secret: str, eu: bool):
-    endpoint = _r2_url(account_id, eu)
+def _write_rclone_conf(name: str, access_key_id: str, secret: str,
+                       account_id: str = "", eu: bool = True, endpoint_url: str = ""):
+    if endpoint_url:
+        provider = "Other"
+        endpoint = endpoint_url
+    else:
+        provider = "Cloudflare"
+        endpoint = _r2_url(account_id, eu)
     content = (
         f"[{name}]\n"
         f"type = s3\n"
-        f"provider = Cloudflare\n"
+        f"provider = {provider}\n"
         f"access_key_id = {access_key_id}\n"
         f"secret_access_key = {secret}\n"
         f"endpoint = {endpoint}\n"
@@ -326,12 +331,17 @@ def _parse_rclone_conf(name: str) -> dict:
     except FileNotFoundError:
         pass
     endpoint = cfg.get("endpoint", "")
-    eu = ".eu.r2." in endpoint
-    m = re.search(r"https://([^.]+)\.", endpoint)
-    account_id = m.group(1) if m else ""
+    is_r2    = ".r2.cloudflarestorage.com" in endpoint
+    eu, account_id = False, ""
+    if is_r2:
+        eu = ".eu.r2." in endpoint
+        m  = re.search(r"https://([^.]+)\.", endpoint)
+        account_id = m.group(1) if m else ""
     return {
+        "is_r2":             is_r2,
         "account_id":        account_id,
         "eu_jurisdiction":   eu,
+        "endpoint_url":      "" if is_r2 else endpoint,
         "access_key_id":     cfg.get("access_key_id", ""),
         "secret_access_key": cfg.get("secret_access_key", ""),
     }
@@ -568,16 +578,22 @@ def create_share():
 
     account_id    = data.get("account_id", "").strip()
     eu            = bool(data.get("eu", True))
+    endpoint_url  = data.get("endpoint_url", "").strip()
     access_key_id = data.get("access_key_id", "").strip()
     secret        = data.get("secret_access_key", "").strip()
     samba_user    = re.sub(r"[^a-zA-Z0-9_.-]", "", data.get("samba_user", "")) or "backupuser"
     samba_password= data.get("samba_password", "")
 
-    if not all([account_id, access_key_id, secret, samba_password]):
-        return jsonify({"error": "Missing required fields"}), 400
+    if endpoint_url:
+        if not all([endpoint_url, access_key_id, secret, samba_password]):
+            return jsonify({"error": "Missing required fields"}), 400
+    else:
+        if not all([account_id, access_key_id, secret, samba_password]):
+            return jsonify({"error": "Missing required fields"}), 400
 
     try:
-        _write_rclone_conf(name, account_id, access_key_id, secret, eu)
+        _write_rclone_conf(name, access_key_id, secret,
+                           account_id=account_id, eu=eu, endpoint_url=endpoint_url)
         os.makedirs(f"{MOUNT_PREFIX}{name}", exist_ok=True)
         os.makedirs(f"{CACHE_PREFIX}{name}", exist_ok=True)
         _write_mount_service(name)
@@ -605,6 +621,7 @@ def update_share(name):
     data          = request.get_json(silent=True) or {}
     account_id    = data.get("account_id", "").strip()
     eu            = bool(data.get("eu", True))
+    endpoint_url  = data.get("endpoint_url", "").strip()
     access_key_id = data.get("access_key_id", "").strip()
     secret        = data.get("secret_access_key", "").strip()
     samba_user    = re.sub(r"[^a-zA-Z0-9_.-]", "", data.get("samba_user", "")) \
@@ -612,16 +629,17 @@ def update_share(name):
     samba_password= data.get("samba_password", "")
 
     try:
-        creds_changed = access_key_id and secret
-        if creds_changed or account_id:
-            current = _parse_rclone_conf(name)
-            _write_rclone_conf(
-                name,
-                account_id    or current["account_id"],
-                access_key_id or current["access_key_id"],
-                secret        or current["secret_access_key"],
-                eu,
-            )
+        if any([account_id, endpoint_url, access_key_id, secret]):
+            current  = _parse_rclone_conf(name)
+            ak       = access_key_id or current["access_key_id"]
+            sk       = secret        or current["secret_access_key"]
+            use_ep   = endpoint_url or (not account_id and not current["is_r2"])
+            if use_ep:
+                _write_rclone_conf(name, ak, sk,
+                                   endpoint_url=endpoint_url or current["endpoint_url"])
+            else:
+                _write_rclone_conf(name, ak, sk,
+                                   account_id=account_id or current["account_id"], eu=eu)
             _unmount(name)
             _run("systemctl", "restart", _service_name(name))
 

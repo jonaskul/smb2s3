@@ -105,7 +105,11 @@
           <input type="text" id="f-name" name="name" pattern="[a-zA-Z0-9][a-zA-Z0-9_.\-]{0,62}" placeholder="my-bucket" required>
         </div>
 
-        <div class="form-row">
+        <div class="form-group form-group--check">
+          <label><input type="checkbox" id="f-s3-other"> Other S3-compatible provider</label>
+        </div>
+
+        <div id="f-r2-fields" class="form-row">
           <div class="form-group">
             <label for="f-account">R2 Account ID</label>
             <input type="text" id="f-account" name="account_id" placeholder="abc123..." required>
@@ -113,6 +117,11 @@
           <div class="form-group form-group--check">
             <label><input type="checkbox" id="f-eu" name="eu" checked> EU jurisdiction</label>
           </div>
+        </div>
+
+        <div id="f-s3-fields" class="form-group" hidden>
+          <label for="f-endpoint">Endpoint URL</label>
+          <input type="text" id="f-endpoint" name="endpoint_url" placeholder="https://s3.amazonaws.com">
         </div>
 
         <div class="form-group">

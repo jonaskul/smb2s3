@@ -18,8 +18,12 @@
   const modalCancel   = document.getElementById("modal-cancel");
   const nameGroup     = document.getElementById("name-group");
   const fName         = document.getElementById("f-name");
+  const fS3Other      = document.getElementById("f-s3-other");
+  const fR2Fields     = document.getElementById("f-r2-fields");
+  const fS3Fields     = document.getElementById("f-s3-fields");
   const fAccount      = document.getElementById("f-account");
   const fEu           = document.getElementById("f-eu");
+  const fEndpoint     = document.getElementById("f-endpoint");
   const fKey          = document.getElementById("f-key");
   const fSecret       = document.getElementById("f-secret");
   const fSambaUser    = document.getElementById("f-samba-user");
@@ -190,6 +194,16 @@
     if (e.target === modalOverlay) closeModal();
   });
 
+  function setProviderMode(isS3Other) {
+    fS3Other.checked      = isS3Other;
+    fR2Fields.hidden      = isS3Other;
+    fS3Fields.hidden      = !isS3Other;
+    fAccount.required     = !isS3Other;
+    fEndpoint.required    = isS3Other;
+  }
+
+  fS3Other.addEventListener("change", () => setProviderMode(fS3Other.checked));
+
   function openAddModal() {
     editingShare = null;
     modalTitle.textContent = "Add Share";
@@ -201,6 +215,7 @@
     fKey.required = true;
     fSecret.required = true;
     fSambaPw.required = true;
+    setProviderMode(false);
     setModalError(null);
     modalOverlay.hidden = false;
     fName.focus();
@@ -221,8 +236,10 @@
 
     try {
       const s = await api("GET", `/api/shares/${encodeURIComponent(name)}`);
+      setProviderMode(!s.is_r2);
       fAccount.value     = s.account_id;
       fEu.checked        = s.eu_jurisdiction;
+      fEndpoint.value    = s.endpoint_url;
       fKey.value         = s.access_key_id;
       fSecret.value      = s.secret_access_key;
       fSambaUser.value   = s.samba_user;
@@ -246,9 +263,11 @@
     modalSubmit.disabled = true;
     modalSubmit.textContent = "Saving…";
 
+    const isS3Other = fS3Other.checked;
     const body = {
-      account_id:         fAccount.value.trim(),
-      eu:                 fEu.checked,
+      ...(isS3Other
+        ? { endpoint_url: fEndpoint.value.trim() }
+        : { account_id: fAccount.value.trim(), eu: fEu.checked }),
       access_key_id:      fKey.value.trim(),
       secret_access_key:  fSecret.value.trim(),
       samba_user:         fSambaUser.value.trim(),
