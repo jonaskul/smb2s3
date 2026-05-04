@@ -615,7 +615,8 @@ hr {
 
 /* ─── Clean-cache modal ──────────────────────────────────────────────────────── */
 
-#clean-cache-overlay {
+#clean-cache-overlay,
+#changelog-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.6);
@@ -626,6 +627,7 @@ hr {
   z-index: 100;
 }
 #clean-cache-overlay[hidden] { display: none; }
+#changelog-overlay[hidden]   { display: none; }
 
 .cc-loading {
   color: var(--text-muted);
