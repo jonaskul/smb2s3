@@ -2,92 +2,77 @@
 
 Creates a Debian 13 LXC on Proxmox that mounts S3-compatible buckets via rclone and exposes them as SMB shares. Optimised for Cloudflare R2, but works with AWS S3, Wasabi, MinIO, and any other S3-compatible provider.
 
-## What the script does
-
-1. Auto-detects the Proxmox environment (VMID, storage, bridge)
-2. Runs a minimal wizard — storage, disk size, network mode and web UI credentials
-3. Downloads the Debian 13 template if not already present locally
-4. Creates and starts a privileged LXC with FUSE support
-5. Installs rclone, Samba, and Python/Flask inside the container
-6. Sets up a web management UI (port 8080) for adding and managing R2 shares
-7. Configures root auto-login on the container console
-8. Prints the web UI URL and login credentials
-
-R2 buckets and SMB shares are configured through the web UI after setup.
-
 ## Requirements
 
-- Proxmox node with internet access (for template download and apt packages)
+- Proxmox node with internet access
 - An S3-compatible bucket with an access key (Access Key ID + Secret Access Key). For Cloudflare R2 you also need an Account ID.
 - Network access between the SMB client and the LXC
 
-## Usage
+## Setup
 
-Run the script on the **Proxmox host** as root:
+Run on the **Proxmox host** as root:
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/jonaskul/smb2s3/main/setup-lxc-r2-smb.sh)
 ```
 
-The wizard will prompt for:
+The wizard prompts for:
 
-| Prompt | Example |
+| Prompt | Default |
 |---|---|
-| Container storage | `local-lvm` (auto-detected) |
-| Disk size (GB) | `120` (default) |
-| Network mode | `dhcp` (default) or `static` |
-| IP + gateway | Static mode only |
-| Web UI admin username | `admin` (default) |
-| Web UI admin password | |
+| Container storage | auto-detected |
+| Disk size (GB) | 120 |
+| Network mode | dhcp |
+| IP + gateway | static mode only |
+| Web UI username | admin |
+| Web UI password | |
 
-A confirmation summary is shown before anything is created.
+A confirmation summary is shown before anything is created. The script prints the web UI URL and credentials when done.
 
-## Web management UI
+## Web UI
 
-After setup, a browser-based UI is available at `http://<CT-IP>:8080`. Log in with the credentials set during the wizard.
+Available at `http://<CT-IP>:8080` after setup.
 
 ### Shares
 
 - View all configured SMB shares and their mount status
-- Add shares from **Cloudflare R2** or any **S3-compatible provider** (AWS S3, Wasabi, MinIO, etc.) — each with its own bucket, credentials, and Samba user
-- Edit existing shares (update credentials, endpoint, or Samba password)
-- Delete shares (stops the rclone service, removes from smb.conf, cleans up cache)
+- **Add** shares from Cloudflare R2 or any S3-compatible provider (AWS S3, Wasabi, MinIO, etc.)
+- **Edit** existing shares — update credentials, endpoint, or Samba password
+- **Delete** shares — stops the rclone service, removes from smb.conf, cleans up cache
 - **Clean cache** — free local disk space after uploads complete (see below)
 
-### Stats
+Each share gets its own rclone config, systemd service, mount point, and VFS cache directory.
 
-A live stats panel is always visible on the dashboard (updates every 3 seconds):
+### Dashboard stats
 
-- **Network graph** — TX/RX throughput over the last ~3 minutes
-- **System card** — memory usage bar and CPU load average
+Live stats panel, updated every 3 seconds:
+
+- **Network** — TX/RX throughput sparkline over the last ~3 minutes, cumulative totals
+- **System** — memory usage bar and CPU load average
 - **Per-share cache** — mount status and local VFS cache size for each share
 - **Watchdog log** — recent mount events (unmounts detected, remount attempts and results)
 
 ### Cache cleanup
 
-Each share card has a **Clean cache** button. It reads rclone's internal metadata (`vfsMeta/`) to distinguish files already uploaded to R2 from files still pending upload, then shows a modal with the breakdown before taking any action.
+Each share card has a **Clean cache** button. It reads rclone's internal metadata to distinguish files already uploaded from files still pending upload, then shows a breakdown before taking any action.
 
 - **Remove uploaded** — deletes only already-uploaded files; pending uploads are untouched
-- **Remove all** — deletes everything including pending uploads (backup client must re-send those files)
+- **Remove all** — deletes everything including pending uploads (backup client must re-send)
 
-Rclone also evicts uploaded files automatically after ~1 hour (`--vfs-cache-max-age` default). The button is useful when you need the space back immediately.
+Rclone also evicts uploaded files automatically after ~1 hour. The button is useful when you need the space back immediately.
 
-### Settings
-
-The ⚙ Settings button in the top bar opens a modal with three tabs.
-
-#### Performance tab
+### Settings — Performance tab
 
 - **VFS cache size** — maximum local disk space per share used to buffer writes before upload. Changing this restarts all active mounts.
-- **rclone performance** — tune CPU and memory usage during transfers. All values restart active mounts when saved:
+- **rclone performance** — tune CPU and memory usage. All values restart active mounts when saved:
   - *Transfers* — concurrent upload streams (default: 2)
   - *Checkers* — concurrent checksum operations (default: 2)
   - *Buffer per transfer* — in-memory buffer in MB per stream (default: 64 MB)
   - *Write-back delay* — seconds after last write before upload starts (default: 5 s)
 
-#### Monitoring tab
+### Settings — Monitoring tab
 
-- **SNMP monitoring** — enable/disable `snmpd` on UDP port 161 (SNMPv2c). Includes extensions for LibreNMS and Zabbix:
+- **SNMP** — enable `snmpd` on UDP port 161 (SNMPv2c). Compatible with LibreNMS and Zabbix (**Linux by SNMP** template). Includes extensions:
 
 | Extension | Data |
 |---|---|
@@ -97,17 +82,17 @@ The ⚙ Settings button in the top bar opens a modal with three tabs.
 | `proc python3` | Web UI process count (alerts if 0) |
 | `osupdate` | Number of pending apt upgrades |
 
-#### Admin tab
+### Settings — Admin tab
 
-- **Change password** — update the web UI admin password (requires the current password).
-- **Disable login** — remove the login requirement entirely. Anyone with network access to port 8080 can manage shares without a password. Useful on isolated home networks.
-- **Config backup / restore** — export all share definitions, credentials, and settings to a JSON file. Use it to restore the container after a reinstall. All data lives in the bucket — a config backup is all that is needed for disaster recovery. You can also save the backup directly to a configured bucket.
+- **Change password** — update the web UI admin password
+- **Disable login** — remove the login requirement entirely. Useful on isolated networks where port 8080 is not exposed to untrusted clients.
+- **Config backup / restore** — export all share definitions, credentials, and settings to a JSON file. Can also save the backup directly to a configured bucket. All data lives in the bucket — a config backup is all that is needed for disaster recovery.
 
 ### Version and updates
 
-The topbar shows the installed version. If a newer version is available on GitHub, an **↑ Update** button appears. Clicking it opens a changelog showing what's new since the installed version, with a confirmation step before the update runs. The page reloads automatically when the service is back up.
+The topbar shows the installed version. When a newer version is available on GitHub, an **↑ Update** button appears. Clicking it shows a changelog of what's new, then asks for confirmation before running the update. The page reloads automatically when the service is back up.
 
-To update from the terminal instead:
+To update from the terminal:
 
 ```bash
 smb2s3-update
@@ -115,17 +100,17 @@ smb2s3-update
 
 ## Disk sizing
 
-Each share buffers writes to local disk before uploading to R2 (rclone VFS cache mode `writes`). This means the entire file being written must fit on the container disk.
+Each share buffers writes locally before uploading (rclone VFS cache mode `writes`). The entire file being written must fit on the container disk.
 
 | Workload | Recommended disk |
 |---|---|
 | Testing / small files | 20 GB |
-| Backups up to ~65 GB per file (default) | 120 GB |
+| Backups up to ~65 GB per file | 120 GB |
 | Backups up to ~200 GB per file | 300+ GB |
 
-Expand the container disk in Proxmox, then update the VFS cache size in Settings accordingly. A safe rule of thumb: keep the VFS cache at 70–80% of the disk to leave room for the OS and rclone metadata.
+Expand the container disk in Proxmox, then update the VFS cache size in Settings. A safe rule of thumb: keep the VFS cache at 70–80% of the disk to leave room for the OS and rclone metadata.
 
-If the container causes high load on the Proxmox node, cap its CPU usage from the host:
+If the container causes high load on the Proxmox node:
 
 ```bash
 pct set <VMID> -cpulimit 2
@@ -133,13 +118,13 @@ pct set <VMID> -cpulimit 2
 
 Reduce *Transfers* and *Buffer per transfer* in Settings to lower CPU and memory usage further.
 
-## Cloudflare R2 API token requirements
+## Cloudflare R2
 
-The token must have **Object Read & Write** permission scoped to the specific bucket. EU jurisdiction must match the actual bucket location — a standard bucket will not respond on the EU endpoint and vice versa.
+The API token needs **Object Read & Write** permission scoped to the bucket. EU jurisdiction must match the actual bucket location.
 
 ## Other S3-compatible providers
 
-When adding a share, check **Other S3-compatible provider** and enter the endpoint URL instead of the R2 account ID. Examples:
+When adding a share, check **Other S3-compatible provider** and enter the endpoint URL. Examples:
 
 | Provider | Endpoint |
 |---|---|
@@ -149,13 +134,11 @@ When adding a share, check **Other S3-compatible provider** and enter the endpoi
 
 ## Connecting an SMB client
 
-1. Open the web UI and add a share — note the share name and Samba credentials you set
-2. Connect using the UNC path `\\<CT-IP>\<share-name>` with the Samba username and password set in the web UI
+1. Add a share in the web UI — note the share name and Samba credentials
+2. Connect with the UNC path `\\<CT-IP>\<share-name>` using the Samba username and password
 
 ## Notes
 
-- The container is created as **privileged** — required for FUSE mounts
-- `force user = root` in the Samba config is necessary because the rclone mount is owned by root
-- Each share gets its own rclone config (`/etc/rclone-{name}.conf`), systemd service (`smb2s3-mount-{name}.service`), mount point (`/mnt/r2-{name}`), and VFS cache directory (`/var/cache/rclone/{name}`)
-- A watchdog timer runs every 60 seconds and automatically restarts any share that has dropped its mount
-- The container auto-logs in as root on the Proxmox **Console** tab (the Shell button always gives root directly and does not need autologin)
+- The container runs as **privileged** — required for FUSE mounts
+- `force user = root` in the Samba config is required because the rclone mount is owned by root
+- A watchdog timer runs every 60 seconds and automatically remounts any dropped share
