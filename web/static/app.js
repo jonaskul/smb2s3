@@ -18,18 +18,21 @@
   const modalError    = document.getElementById("modal-error");
   const modalCancel   = document.getElementById("modal-cancel");
   const nameGroup     = document.getElementById("name-group");
-  const fName         = document.getElementById("f-name");
-  const fS3Other      = document.getElementById("f-s3-other");
-  const fR2Fields     = document.getElementById("f-r2-fields");
-  const fS3Fields     = document.getElementById("f-s3-fields");
-  const fAccount      = document.getElementById("f-account");
-  const fEu           = document.getElementById("f-eu");
-  const fEndpoint     = document.getElementById("f-endpoint");
-  const fKey          = document.getElementById("f-key");
-  const fSecret       = document.getElementById("f-secret");
-  const fSambaUser    = document.getElementById("f-samba-user");
-  const fSambaPw      = document.getElementById("f-samba-pw");
-  const modalSubmit   = document.getElementById("modal-submit");
+  const fName             = document.getElementById("f-name");
+  const fNamePreview      = document.getElementById("f-name-preview");
+  const fNamePreviewPath  = document.getElementById("f-name-preview-path");
+  const fS3Other          = document.getElementById("f-s3-other");
+  const fR2Fields         = document.getElementById("f-r2-fields");
+  const fS3Fields         = document.getElementById("f-s3-fields");
+  const fAccount          = document.getElementById("f-account");
+  const fEu               = document.getElementById("f-eu");
+  const fEndpoint         = document.getElementById("f-endpoint");
+  const fKey              = document.getElementById("f-key");
+  const fSecret           = document.getElementById("f-secret");
+  const fCredsHint        = document.getElementById("f-creds-hint");
+  const fSambaUser        = document.getElementById("f-samba-user");
+  const fSambaPw          = document.getElementById("f-samba-pw");
+  const modalSubmit       = document.getElementById("modal-submit");
 
   // ─── API helpers ────────────────────────────────────────────────────────────
   async function api(method, path, body) {
@@ -235,14 +238,25 @@
   });
 
   function setProviderMode(isS3Other) {
-    fS3Other.checked      = isS3Other;
-    fR2Fields.hidden      = isS3Other;
-    fS3Fields.hidden      = !isS3Other;
-    fAccount.required     = !isS3Other;
-    fEndpoint.required    = isS3Other;
+    fS3Other.checked   = isS3Other;
+    fR2Fields.hidden   = isS3Other;
+    fS3Fields.hidden   = !isS3Other;
+    fAccount.required  = !isS3Other;
+    fEndpoint.required = isS3Other;
+    fCredsHint.hidden  = isS3Other;
   }
 
   fS3Other.addEventListener("change", () => setProviderMode(fS3Other.checked));
+
+  fName.addEventListener("input", () => {
+    const v = fName.value.trim();
+    if (v) {
+      fNamePreviewPath.textContent = `\\\\${window.location.hostname}\\${v}`;
+      fNamePreview.hidden = false;
+    } else {
+      fNamePreview.hidden = true;
+    }
+  });
 
   function openAddModal() {
     editingShare = null;
@@ -250,6 +264,7 @@
     shareForm.reset();
     fEu.checked = true;
     fSambaUser.value = "";
+    fNamePreview.hidden = true;
     nameGroup.hidden = false;
     fName.required = true;
     fKey.required = true;

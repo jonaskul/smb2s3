@@ -103,25 +103,29 @@
         <div class="form-group" id="name-group">
           <label for="f-name">Share / bucket name</label>
           <input type="text" id="f-name" name="name" pattern="[a-zA-Z0-9][a-zA-Z0-9_.\-]{0,62}" placeholder="my-bucket" required>
+          <p id="f-name-preview" class="field-hint" hidden>SMB path: <code id="f-name-preview-path"></code></p>
         </div>
 
         <div class="form-group form-group--check">
           <label><input type="checkbox" id="f-s3-other"> Other S3-compatible provider</label>
+          <p class="field-hint">Default is Cloudflare R2. Check this for AWS S3, Wasabi, MinIO, etc.</p>
         </div>
 
         <div id="f-r2-fields" class="form-row">
           <div class="form-group">
             <label for="f-account">R2 Account ID</label>
             <input type="text" id="f-account" name="account_id" placeholder="abc123..." required>
+            <p class="field-hint">Cloudflare dashboard → R2 → Overview</p>
           </div>
           <div class="form-group form-group--check">
-            <label><input type="checkbox" id="f-eu" name="eu" checked> EU jurisdiction</label>
+            <label title="Check if your bucket was created in Cloudflare's EU jurisdiction"><input type="checkbox" id="f-eu" name="eu" checked> EU jurisdiction</label>
           </div>
         </div>
 
         <div id="f-s3-fields" class="form-group" hidden>
           <label for="f-endpoint">Endpoint URL</label>
           <input type="text" id="f-endpoint" name="endpoint_url" placeholder="https://s3.amazonaws.com">
+          <p class="field-hint">e.g. <code>https://s3.amazonaws.com</code> (AWS S3) · <code>https://s3.eu-central-2.wasabisys.com</code> (Wasabi EU) · <code>http://&lt;host&gt;:9000</code> (MinIO)</p>
         </div>
 
         <div class="form-group">
@@ -134,7 +138,9 @@
           <input type="text" id="f-secret" name="secret_access_key" placeholder="Secret Access Key" required>
         </div>
 
-        <hr>
+        <p id="f-creds-hint" class="field-hint">R2: create an API token in <strong>R2 → Manage R2 API Tokens</strong> with Object Read &amp; Write permission.</p>
+
+        <div class="form-divider">SMB share</div>
 
         <div class="form-row">
           <div class="form-group">
