@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python syntax
+        run: python3 -m py_compile web/app.py
+
+      - name: JavaScript syntax
+        run: node --check web/static/app.js
+
+      - name: Shell syntax
+        run: |
+          bash -n setup-lxc-r2-smb.sh
+          bash -n scripts/smb2s3-update
+
+      - name: Referenced element IDs exist in index.html
+        run: python3 .github/scripts/check_ids.py
+
+      - name: Version matches newest changelog entry
+        run: |
+          version="$(cat web/version)"
+          expected="## ${version}"
+          actual="$(head -n1 web/changelog.md)"
+          if [ "$actual" != "$expected" ]; then
+            echo "web/version is '${version}' but changelog starts with '${actual}'"
+            echo "Bump web/version and add a matching '## ${version}' entry to web/changelog.md."
+            exit 1
+          fi

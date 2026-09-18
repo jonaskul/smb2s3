@@ -1,3 +1,8 @@
+## 2026-05-03e
+- Settings no longer restart active mounts unless a performance value changed
+- Invalid performance values return a clear error instead of failing the save
+- Escape server error text rendered in the shares list
+
 ## 2026-05-03d
 - Add Share modal: field hints, live SMB path preview, labelled section divider
 - Clarify Cloudflare R2 as default provider with examples for AWS S3, Wasabi, MinIO

@@ -924,11 +924,25 @@ def save_settings():
     no_auth       = bool(data.get("no_auth", False))
     community     = re.sub(r"[^a-zA-Z0-9_-]", "", data.get("snmp_community", "public")) or "public"
     allowed       = re.sub(r"[^a-zA-Z0-9._:/\-]", "", data.get("snmp_allowed", "").strip())
-    vfs_cache_gb  = max(1, int(data.get("vfs_cache_gb", 70)))
-    transfers     = max(1, min(16,   int(data.get("transfers",    2))))
-    buffer_mb     = max(8, min(1024, int(data.get("buffer_mb",   64))))
-    write_back_s  = max(1, min(60,   int(data.get("write_back_s", 5))))
-    checkers      = max(1, min(16,   int(data.get("checkers",     2))))
+    try:
+        vfs_cache_gb  = max(1, int(data.get("vfs_cache_gb", 70)))
+        transfers     = max(1, min(16,   int(data.get("transfers",    2))))
+        buffer_mb     = max(8, min(1024, int(data.get("buffer_mb",   64))))
+        write_back_s  = max(1, min(60,   int(data.get("write_back_s", 5))))
+        checkers      = max(1, min(16,   int(data.get("checkers",     2))))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Performance settings must be whole numbers"}), 400
+
+    # Only these affect the rclone mount command line.
+    mount_settings = {
+        "vfs_cache_gb":   str(vfs_cache_gb),
+        "transfers":      str(transfers),
+        "buffer_mb":      str(buffer_mb),
+        "write_back_s":   str(write_back_s),
+        "checkers":       str(checkers),
+    }
+    old = _load_conf()
+    mounts_changed = any(old.get(k) != v for k, v in mount_settings.items())
 
     try:
         _apply_snmp(snmp_enabled, community, allowed)
@@ -936,15 +950,12 @@ def save_settings():
             "snmp_enabled":   "true" if snmp_enabled else "false",
             "snmp_community": community,
             "snmp_allowed":   allowed,
-            "vfs_cache_gb":   str(vfs_cache_gb),
-            "transfers":      str(transfers),
-            "buffer_mb":      str(buffer_mb),
-            "write_back_s":   str(write_back_s),
-            "checkers":       str(checkers),
             "no_auth":        "true" if no_auth else "false",
+            **mount_settings,
         })
-        # Regenerate and restart all mount services with new cache size
-        sections = _parse_smb_conf()
+        # Restarting a mount drops in-flight SMB writes, so only do it when a
+        # value that actually changes the rclone command line was edited.
+        sections = _parse_smb_conf() if mounts_changed else {}
         if sections:
             for name in sections:
                 _write_mount_service(name)
@@ -954,7 +965,7 @@ def save_settings():
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 500
 
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "mounts_restarted": bool(mounts_changed)})
 
 
 # ─── API: config backup / restore ────────────────────────────────────────────

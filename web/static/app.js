@@ -190,7 +190,7 @@
       renderShares(shares);
     } catch (err) {
       if (err.status === 401) { showLogin("Session expired — please log in again."); return; }
-      sharesGrid.innerHTML = `<p class="error-msg">Failed to load shares: ${err.message}</p>`;
+      sharesGrid.innerHTML = `<p class="error-msg">Failed to load shares: ${esc(err.message)}</p>`;
     }
   }
 
