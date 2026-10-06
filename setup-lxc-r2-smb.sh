@@ -283,6 +283,7 @@ setup_web_ui() {
     exec_ct "curl -fsSL '${raw_base}/static/index.html' -o /opt/smb2s3/static/index.html"
     exec_ct "curl -fsSL '${raw_base}/static/app.js'     -o /opt/smb2s3/static/app.js"
     exec_ct "curl -fsSL '${raw_base}/static/style.css'  -o /opt/smb2s3/static/style.css"
+    exec_ct "curl -fsSL '${raw_base}/static/favicon.svg' -o /opt/smb2s3/static/favicon.svg"
 
     # Base64-encode password to safely pass it into pct exec python3 -c
     local pw_b64

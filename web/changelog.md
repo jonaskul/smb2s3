@@ -1,3 +1,7 @@
+## 2026-05-03g
+- Dashboard reuses cache-size readings for 30 s instead of scanning the cache every 3 s
+- Fresh installs now get the favicon
+
 ## 2026-05-03f
 - Deleting a share can no longer remove bucket contents if the unmount fails
 - Mount status no longer shows a share as mounted when a similarly named one is

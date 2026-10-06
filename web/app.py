@@ -453,23 +453,38 @@ def _mem_stats():
         return {"total_mb": 0, "used_mb": 0, "pct": 0}
 
 
+# `du` walks the whole cache tree. With tens of GB of cached backup data that
+# is real disk work, and the dashboard polls every 3 s per open tab, so the
+# result is reused for a while. Cache cleanup drops the entry explicitly.
+_DU_TTL   = 30
+_du_cache = {}   # name -> (timestamp, bytes)
+
+
+def _cache_bytes(name: str) -> int:
+    hit = _du_cache.get(name)
+    if hit and time.monotonic() - hit[0] < _DU_TTL:
+        return hit[1]
+    size = 0
+    try:
+        r = _run("du", "-sb", f"{CACHE_PREFIX}{name}", check=False)
+        if r.returncode == 0:
+            size = int(r.stdout.split()[0])
+    except Exception:
+        pass
+    _du_cache[name] = (time.monotonic(), size)
+    return size
+
+
 @app.route("/api/stats")
 @require_login
 def get_stats():
     sections = _parse_smb_conf()
     shares = []
     for name in sections:
-        cache_bytes = 0
-        try:
-            r = _run("du", "-sb", f"{CACHE_PREFIX}{name}", check=False)
-            if r.returncode == 0:
-                cache_bytes = int(r.stdout.split()[0])
-        except Exception:
-            pass
         shares.append({
             "name":        name,
             "mounted":     _is_mounted(name),
-            "cache_bytes": cache_bytes,
+            "cache_bytes": _cache_bytes(name),
         })
 
     load = 0.0
@@ -801,6 +816,7 @@ def clean_cache(name):
         else:
             shutil.rmtree(cache_dir, ignore_errors=True)
             os.makedirs(cache_dir, exist_ok=True)
+        _du_cache.pop(name, None)
         _run("systemctl", "start", svc, check=False)
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 500
@@ -845,6 +861,7 @@ def delete_share(name):
         except OSError:
             pass
         shutil.rmtree(f"{CACHE_PREFIX}{name}", ignore_errors=True)
+        _du_cache.pop(name, None)
         _run("systemctl", "daemon-reload")
         _run("systemctl", "reload", "smbd")
     except RuntimeError as e:
