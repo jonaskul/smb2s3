@@ -1,3 +1,8 @@
+## 2026-05-03f
+- Deleting a share can no longer remove bucket contents if the unmount fails
+- Mount status no longer shows a share as mounted when a similarly named one is
+- Updates download everything before installing, so a failed download leaves the old version intact
+
 ## 2026-05-03e
 - Settings no longer restart active mounts unless a performance value changed
 - Invalid performance values return a clear error instead of failing the save

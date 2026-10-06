@@ -286,7 +286,10 @@ def _is_mounted(name: str) -> bool:
     mount_path = f"{MOUNT_PREFIX}{name}"
     try:
         with open("/proc/mounts") as f:
-            return any(mount_path in line for line in f)
+            # Compare the mountpoint field exactly: a substring test would
+            # report "backup" as mounted whenever "backup2" is.
+            return any(line.split()[1] == mount_path
+                       for line in f if len(line.split()) > 1)
     except FileNotFoundError:
         return False
 
@@ -818,18 +821,29 @@ def delete_share(name):
     try:
         svc = _service_name(name)
         _run("systemctl", "disable", "--now", svc, check=False)
+        _unmount(name)
+        # While the bucket is still mounted, the mountpoint *is* the bucket:
+        # anything that deletes under it deletes remote objects. Stop here and
+        # leave the config in place so the delete can be retried.
+        if _is_mounted(name):
+            return jsonify({"error": f"Could not unmount {MOUNT_PREFIX}{name} — "
+                                     "share not deleted. Try again in a moment."}), 500
         svc_path = f"/etc/systemd/system/{svc}"
         try:
             os.unlink(svc_path)
         except FileNotFoundError:
             pass
-        _unmount(name)
         _smb_conf_remove_share(name)
         try:
             os.unlink(f"{RCLONE_CONF_PFX}{name}.conf")
         except FileNotFoundError:
             pass
-        shutil.rmtree(f"{MOUNT_PREFIX}{name}", ignore_errors=True)
+        # rmdir, not rmtree: an unmounted mountpoint is empty, and if it is not,
+        # something is still mounted there and must not be recursed into.
+        try:
+            os.rmdir(f"{MOUNT_PREFIX}{name}")
+        except OSError:
+            pass
         shutil.rmtree(f"{CACHE_PREFIX}{name}", ignore_errors=True)
         _run("systemctl", "daemon-reload")
         _run("systemctl", "reload", "smbd")

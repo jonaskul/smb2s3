@@ -1,16 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 RAW=https://raw.githubusercontent.com/jonaskul/smb2s3/main
+
+# Download everything to a staging dir first. Nothing in the live install is
+# touched until every file has arrived, so a failed download leaves the old
+# version fully intact instead of a mix of old and new files.
+STAGE=$(mktemp -d)
+trap 'rm -rf "$STAGE"' EXIT
+
+fetch() { curl -fsSL "${RAW}/$1" -o "${STAGE}/$2"; }
+fetch web/app.py              app.py
+fetch web/static/index.html   index.html
+fetch web/static/app.js       app.js
+fetch web/static/style.css    style.css
+fetch web/static/favicon.svg  favicon.svg
+fetch web/version             version
+fetch web/changelog.md        changelog.md
+fetch scripts/smb2s3-update   smb2s3-update
+
+# Refuse to install a backend that does not even parse.
+python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read())' "${STAGE}/app.py"
+
 mkdir -p /etc/smb2s3 /opt/smb2s3/static
-curl -fsSL ${RAW}/web/app.py                -o /opt/smb2s3/app.py
-curl -fsSL ${RAW}/web/static/index.html    -o /opt/smb2s3/static/index.html
-curl -fsSL ${RAW}/web/static/app.js        -o /opt/smb2s3/static/app.js
-curl -fsSL ${RAW}/web/static/style.css     -o /opt/smb2s3/static/style.css
-curl -fsSL ${RAW}/web/static/favicon.svg   -o /opt/smb2s3/static/favicon.svg
-curl -fsSL ${RAW}/web/version           -o /etc/smb2s3/version
-curl -fsSL ${RAW}/web/changelog.md      -o /etc/smb2s3/changelog.md
-curl -fsSL ${RAW}/scripts/smb2s3-update -o /usr/local/bin/smb2s3-update.new
-chmod +x /usr/local/bin/smb2s3-update.new
+install -m 644 "${STAGE}/app.py"       /opt/smb2s3/app.py
+install -m 644 "${STAGE}/index.html"   /opt/smb2s3/static/index.html
+install -m 644 "${STAGE}/app.js"       /opt/smb2s3/static/app.js
+install -m 644 "${STAGE}/style.css"    /opt/smb2s3/static/style.css
+install -m 644 "${STAGE}/favicon.svg"  /opt/smb2s3/static/favicon.svg
+install -m 644 "${STAGE}/changelog.md" /etc/smb2s3/changelog.md
+install -m 644 "${STAGE}/version"      /etc/smb2s3/version
+# Replace this script via rename so the running copy is not overwritten mid-read.
+install -m 755 "${STAGE}/smb2s3-update" /usr/local/bin/smb2s3-update.new
 mv -f /usr/local/bin/smb2s3-update.new /usr/local/bin/smb2s3-update
+
 systemctl restart smb2s3-web
 echo "smb2s3 updated to $(cat /etc/smb2s3/version)."
